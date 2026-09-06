@@ -177,7 +177,8 @@
       let reportedHtml = p.reported
         ? `<div class="post-reply" style="color:var(--muted);">reported — our automated review bots are looking at this first. it'll only reach a human if the bots can't resolve it.</div>`
         : '';
-      const isOwn = p.authorUid && p.authorUid === currentUid;
+      const isOwn = (p.authorUid && p.authorUid === currentUid)
+                    || (!p.authorUid && p.author === currentUsername);
       const deleteHtml = isOwn ? `<button data-delete="${p.id}">delete</button>` : '';
 
       div.innerHTML = `
