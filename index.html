@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vent.</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav" id="nav"></div>
+
+  <div class="hero">say whatever's<br>on your mind<span>.</span></div>
+  <div class="tagline">
+    vent. is a place to get things off your chest — no filters on your feelings.
+    the only things not welcome here are explicit content and bullying.
+  </div>
+
+  <div class="card">
+    <button class="btn-primary" onclick="window.location.href='signup.html'">create an account</button>
+    <button class="btn-link" onclick="window.location.href='login.html'">already have an account? log in</button>
+  </div>
+
+  <div class="footer-note">
+    an idea for a place to vent — not a published product.<br>
+    <a href="about.html">read about how it works →</a>
+  </div>
+</div>
+<script src="vent.js"></script>
+<script type="module">
+  import { auth, onAuthStateChanged } from './firebase.js';
+  onAuthStateChanged(auth, (user) => {
+    const username = user ? (user.displayName || user.email) : null;
+    document.getElementById('nav').innerHTML = buildNavHtml(username);
+    const btn = document.getElementById('navSignOut');
+    if (btn){
+      import('./firebase.js').then(({ auth, signOut }) => {
+        btn.addEventListener('click', async () => {
+          await signOut(auth);
+          window.location.reload();
+        });
+      });
+    }
+  });
+</script>
+</body>
+</html>

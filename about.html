@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vent. — about</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav" id="nav"></div>
+
+  <div class="hero" style="font-size:1.8rem;">how vent<span>.</span> works</div>
+  <div class="tagline">
+    a place to say whatever's on your mind. no filters on your feelings —
+    just two rules, and a few quiet systems working in the background.
+  </div>
+
+  <h2 class="section-title">community rules</h2>
+  <ul class="rule-list">
+    <li><b>no 18+ / explicit content.</b> sexual or explicit material isn't allowed.</li>
+    <li><b>no bullying.</b> targeting or insulting another person isn't allowed. venting about your own experiences — even painful ones, including suicide or self-harm — is never a violation and never gets punished.</li>
+  </ul>
+
+  <h2 class="section-title">how moderation works</h2>
+  <ul class="rule-list">
+    <li><b>bullying:</b> a flagged post gets an automatic reply telling the user to stop, before anything else happens.</li>
+    <li><b>name detector:</b> if a post targets someone by typing their username, that person simply won't see it — it shows as an empty post to them, shielding them automatically.</li>
+    <li><b>suicide / self-harm mentions:</b> never treated as a violation. the post goes through as normal, and the person just sees a gentle popup with support resources alongside it.</li>
+    <li><b>reports:</b> go through automated bots first. only what the bots can't resolve gets escalated to a human — right now, that's just the project's solo creator.</li>
+    <li><b>server hiccups:</b> if something breaks, you're gently asked to wait a moment — never a scary error message.</li>
+  </ul>
+
+  <h2 class="section-title">open source</h2>
+  <p style="font-size:0.92rem; line-height:1.6; color:var(--paper);">
+    vent. is meant to be open-source — anyone can read the code, fork it, and fix bugs.
+    forks are personally tested before anything gets merged.
+  </p>
+
+  <div class="footer-note">
+    this is a prototype for an idea — not a published product.<br>
+    accounts and posts here only exist for demo purposes.
+  </div>
+</div>
+<script src="vent.js"></script>
+<script type="module">
+  import { auth, onAuthStateChanged, signOut } from './firebase.js';
+  onAuthStateChanged(auth, (user) => {
+    const username = user ? (user.displayName || user.email) : null;
+    document.getElementById('nav').innerHTML = buildNavHtml(username);
+    const btn = document.getElementById('navSignOut');
+    if (btn){
+      btn.addEventListener('click', async () => {
+        await signOut(auth);
+        window.location.reload();
+      });
+    }
+  });
+</script>
+</body>
+</html>

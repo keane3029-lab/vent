@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vent. — log in</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav" id="nav"></div>
+
+  <div class="card">
+    <div style="font-size:0.9rem; color:var(--muted); margin-bottom:4px;">log in</div>
+
+    <label class="field-label">username</label>
+    <input type="text" id="li-username" autocomplete="off">
+    <label class="field-label">password</label>
+    <input type="password" id="li-password" autocomplete="off">
+
+    <div class="msg warn" id="authMsg"></div>
+    <button class="btn-primary" id="authSubmit">log in</button>
+    <button class="btn-link" onclick="window.location.href='signup.html'">new here? create an account</button>
+  </div>
+</div>
+<script src="vent.js"></script>
+<script type="module">
+  import { auth, db, signInWithEmailAndPassword, doc, getDoc } from './firebase.js';
+
+  document.getElementById('nav').innerHTML = buildNavHtml(null);
+
+  document.getElementById('authSubmit').addEventListener('click', async () => {
+    const msg = document.getElementById('authMsg');
+    msg.classList.remove('show');
+
+    const u = document.getElementById('li-username').value.trim();
+    const p = document.getElementById('li-password').value;
+
+    try {
+      const unameSnap = await getDoc(doc(db, 'usernames', u.toLowerCase()));
+      if (!unameSnap.exists()){
+        msg.textContent = "that username and password don't match.";
+        msg.classList.add('show');
+        return;
+      }
+      const email = unameSnap.data().email;
+      await signInWithEmailAndPassword(auth, email, p);
+      window.location.href = 'feed.html';
+    } catch (err){
+      msg.textContent = "that username and password don't match.";
+      msg.classList.add('show');
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vent. — create account</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav" id="nav"></div>
+
+  <div class="card">
+    <div style="font-size:0.9rem; color:var(--muted); margin-bottom:4px;">create an account</div>
+
+    <label class="field-label">username</label>
+    <input type="text" id="su-username" autocomplete="off">
+    <label class="field-label">email</label>
+    <input type="email" id="su-email" autocomplete="off">
+    <label class="field-label">password</label>
+    <input type="password" id="su-password" autocomplete="off">
+
+    <div class="msg warn" id="authMsg"></div>
+    <button class="btn-primary" id="authSubmit">create account</button>
+    <button class="btn-link" onclick="window.location.href='login.html'">already have an account? log in</button>
+  </div>
+</div>
+<script src="vent.js"></script>
+<script type="module">
+  import { auth, db, createUserWithEmailAndPassword, updateProfile, doc, setDoc, getDoc } from './firebase.js';
+
+  document.getElementById('nav').innerHTML = buildNavHtml(null);
+
+  document.getElementById('authSubmit').addEventListener('click', async () => {
+    const msg = document.getElementById('authMsg');
+    msg.classList.remove('show');
+
+    const u = document.getElementById('su-username').value.trim();
+    const e = document.getElementById('su-email').value.trim();
+    const p = document.getElementById('su-password').value;
+
+    if (!u || !e || !p){
+      msg.textContent = 'fill in a username, email, and password to continue.';
+      msg.classList.add('show');
+      return;
+    }
+
+    try {
+      const unameRef = doc(db, 'usernames', u.toLowerCase());
+      const existing = await getDoc(unameRef);
+      if (existing.exists()){
+        msg.textContent = 'that username is already taken.';
+        msg.classList.add('show');
+        return;
+      }
+
+      const cred = await createUserWithEmailAndPassword(auth, e, p);
+      await updateProfile(cred.user, { displayName: u });
+      await setDoc(unameRef, { uid: cred.user.uid, email: e });
+      await setDoc(doc(db, 'users', cred.user.uid), { username: u, email: e });
+
+      window.location.href = 'feed.html';
+    } catch (err){
+      msg.textContent = 'something went wrong: ' + (err.message || 'please try again.');
+      msg.classList.add('show');
+    }
+  });
+</script>
+</body>
+</html>

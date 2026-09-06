@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vent.</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap');
+
+  :root{
+    --ink:#1b2430;
+    --ink-soft:#2a3646;
+    --paper:#f6f1e7;
+    --paper-dim:#ece4d3;
+    --coral:#c97064;
+    --coral-dim:#a85a50;
+    --sage:#8aa399;
+    --muted:#8d97a8;
+    --line: rgba(246,241,231,0.14);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Inter', system-ui, sans-serif;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+  .wrap{
+    width:100%;
+    max-width:460px;
+    padding: 28px 20px 60px;
+  }
+  .wordmark{
+    font-family:'Source Serif 4', serif;
+    font-size:2.1rem;
+    letter-spacing:-0.01em;
+    margin: 4px 0 2px;
+  }
+  .wordmark span{ color: var(--coral); }
+  .tagline{
+    color: var(--muted);
+    font-size:0.92rem;
+    margin-bottom: 28px;
+  }
+
+  /* Auth */
+  .card{
+    background: var(--ink-soft);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .field-label{
+    display:block;
+    font-size:0.8rem;
+    color: var(--muted);
+    margin: 12px 0 6px;
+  }
+  input[type=text], input[type=email], input[type=password], textarea{
+    width:100%;
+    background: var(--ink);
+    border: 1px solid var(--line);
+    color: var(--paper);
+    border-radius: 7px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 0.95rem;
+  }
+  input:focus, textarea:focus{
+    outline: 2px solid var(--sage);
+    outline-offset: 1px;
+  }
+  textarea{ resize: vertical; min-height: 90px; line-height:1.5; }
+
+  button{
+    font-family: inherit;
+    font-size: 0.92rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 7px;
+    padding: 11px 16px;
+    cursor: pointer;
+    transition: transform 0.08s ease;
+  }
+  button:active{ transform: scale(0.98); }
+  .btn-primary{
+    background: var(--coral);
+    color: var(--ink);
+    width:100%;
+    margin-top: 18px;
+  }
+  .btn-primary:hover{ background: var(--coral-dim); }
+  .btn-link{
+    background:none;
+    color: var(--sage);
+    padding: 8px 0;
+    width:100%;
+    text-align:center;
+    font-weight:500;
+  }
+  .auth-error{
+    color: var(--coral);
+    font-size: 0.85rem;
+    margin-top: 10px;
+    display:none;
+  }
+
+  /* App shell */
+  .topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    margin-bottom: 20px;
+  }
+  .whoami{ font-size:0.85rem; color: var(--muted); }
+  .whoami b{ color: var(--paper); font-weight:600; }
+  .signout{
+    background:none;
+    color: var(--muted);
+    padding:0;
+    font-size:0.82rem;
+    text-decoration: underline;
+  }
+
+  .composer{
+    background: var(--ink-soft);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 22px;
+  }
+  .composer-note{
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-top: 10px;
+    line-height:1.5;
+    display:none;
+  }
+  .composer-note.show{ display:block; }
+  .composer-note.warn{ color: var(--coral); }
+  .composer-note.calm{ color: var(--sage); }
+
+  .feed-heading{
+    font-family:'Source Serif 4', serif;
+    font-size:1.05rem;
+    color: var(--muted);
+    margin: 0 0 12px;
+    font-style: italic;
+  }
+
+  .post{
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 3px 10px 10px 10px;
+    padding: 16px 16px 12px;
+    margin-bottom: 14px;
+    position:relative;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.15);
+  }
+  .post.hidden-post{
+    background: var(--ink-soft);
+    color: var(--muted);
+    border: 1px dashed var(--line);
+    font-style: italic;
+    font-size: 0.85rem;
+  }
+  .post-meta{
+    display:flex;
+    justify-content:space-between;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom:8px;
+  }
+  .post-body{
+    font-size: 0.95rem;
+    line-height:1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .post-actions{
+    display:flex;
+    gap:14px;
+    margin-top: 10px;
+  }
+  .post-actions button{
+    background:none;
+    padding:0;
+    font-size:0.78rem;
+    color: var(--muted);
+    font-weight:500;
+  }
+  .post-actions button:hover{ color: var(--coral-dim); }
+  .post-reply{
+    margin-top:10px;
+    padding-top:10px;
+    border-top: 1px solid rgba(27,36,48,0.12);
+    font-size: 0.82rem;
+    color: var(--coral-dim);
+  }
+  .empty-state{
+    color: var(--muted);
+    font-size: 0.88rem;
+    text-align:center;
+    padding: 30px 10px;
+  }
+
+  /* Modal */
+  .modal-backdrop{
+    position:fixed; inset:0;
+    background: rgba(0,0,0,0.55);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding: 20px;
+    z-index: 50;
+  }
+  .modal-backdrop.show{ display:flex; }
+  .modal{
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 12px;
+    padding: 22px;
+    max-width: 380px;
+    width:100%;
+  }
+  .modal h3{
+    font-family:'Source Serif 4', serif;
+    margin: 0 0 8px;
+    font-size: 1.2rem;
+  }
+  .modal p{
+    font-size: 0.9rem;
+    line-height:1.55;
+    margin: 0 0 14px;
+    color: #3a4657;
+  }
+  .modal .resource{
+    background: var(--paper-dim);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 0.85rem;
+    margin-bottom: 14px;
+  }
+  .modal .resource b{ display:block; margin-bottom:2px; }
+  .modal button{
+    background: var(--sage);
+    color: var(--ink);
+    width:100%;
+  }
+
+  .footer-note{
+    text-align:center;
+    color: var(--muted);
+    font-size: 0.78rem;
+    margin-top: 26px;
+    line-height:1.6;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="wordmark">vent<span>.</span></div>
+  <div class="tagline" id="tagline">say whatever's on your mind.</div>
+
+  <!-- AUTH VIEW -->
+  <div id="authView">
+    <div class="card">
+      <div id="authModeLabel" style="font-size:0.9rem; color:var(--muted);">create an account</div>
+
+      <div id="signupFields">
+        <label class="field-label">username</label>
+        <input type="text" id="su-username" autocomplete="off">
+        <label class="field-label">email</label>
+        <input type="email" id="su-email" autocomplete="off">
+        <label class="field-label">password</label>
+        <input type="password" id="su-password" autocomplete="off">
+      </div>
+
+      <div id="loginFields" style="display:none;">
+        <label class="field-label">username</label>
+        <input type="text" id="li-username" autocomplete="off">
+        <label class="field-label">password</label>
+        <input type="password" id="li-password" autocomplete="off">
+      </div>
+
+      <div class="auth-error" id="authError"></div>
+      <button class="btn-primary" id="authSubmit">create account</button>
+      <button class="btn-link" id="authSwitch">already have an account? log in</button>
+    </div>
+  </div>
+
+  <!-- APP VIEW -->
+  <div id="appView" style="display:none;">
+    <div class="topbar">
+      <div class="whoami">logged in as <b id="whoamiName"></b></div>
+      <button class="signout" id="signOutBtn">sign out</button>
+    </div>
+
+    <div class="composer">
+      <textarea id="postInput" placeholder="what's on your mind?"></textarea>
+      <div class="composer-note" id="composerNote"></div>
+      <button class="btn-primary" id="postBtn">post</button>
+    </div>
+
+    <div class="feed-heading">the feed</div>
+    <div id="feed"></div>
+  </div>
+
+  <div class="footer-note">
+    an idea for a place to vent — not a published product.<br>
+    no 18+ content · no bullying · your struggles are always welcome here.
+  </div>
+</div>
+
+<!-- Support resources modal (suicide/self-harm mention) -->
+<div class="modal-backdrop" id="supportModal">
+  <div class="modal">
+    <h3>we saw that, and we're glad you shared it</h3>
+    <p>your post went through — nothing about this gets flagged or hidden. if things feel heavy right now, you don't have to carry it alone.</p>
+    <div class="resource">
+      <b>988 Suicide & Crisis Lifeline (US)</b>
+      call or text 988, available 24/7
+    </div>
+    <div class="resource">
+      <b>Crisis Text Line</b>
+      text HOME to 741741
+    </div>
+    <button id="closeSupportModal">close</button>
+  </div>
+</div>
+
+<!-- Soft server error modal -->
+<div class="modal-backdrop" id="errorModal">
+  <div class="modal">
+    <h3>hang tight for a moment</h3>
+    <p>something on our end needs a second to catch up. nothing you wrote was lost — just wait a moment and try again.</p>
+    <button id="closeErrorModal">okay</button>
+  </div>
+</div>
+
+<script>
+(function(){
+
+  // ---------- fake in-memory "backend" (demo only, no real network) ----------
+  let users = {};        // username -> {email, password}
+  let session = null;    // current logged-in username
+  let posts = [];         // {id, author, text, ts, flaggedBullying, targetsUsername}
+  let strikes = {};       // username -> count
+
+  const explicitWords = ['porn','nude','sex tape','xxx']; // demo-only, non-exhaustive
+  const bullyWords = ['idiot','loser','kill yourself','worthless','stupid ugly','retard'];
+  const selfHarmWords = ['suicide','self-harm','self harm','kill myself','want to die','end it all'];
+
+  function containsAny(text, list){
+    const lower = text.toLowerCase();
+    return list.some(w => lower.includes(w));
+  }
+
+  function findTargetedUsername(text){
+    // if the post text contains another registered user's username, they're "targeted"
+    const lower = text.toLowerCase();
+    for (const uname in users){
+      if (uname === session) continue;
+      if (lower.includes(uname.toLowerCase())){
+        return uname;
+      }
+    }
+    return null;
+  }
+
+  // ---------- DOM refs ----------
+  const authView = document.getElementById('authView');
+  const appView = document.getElementById('appView');
+  const authModeLabel = document.getElementById('authModeLabel');
+  const signupFields = document.getElementById('signupFields');
+  const loginFields = document.getElementById('loginFields');
+  const authSubmit = document.getElementById('authSubmit');
+  const authSwitch = document.getElementById('authSwitch');
+  const authError = document.getElementById('authError');
+  const whoamiName = document.getElementById('whoamiName');
+  const signOutBtn = document.getElementById('signOutBtn');
+  const postInput = document.getElementById('postInput');
+  const postBtn = document.getElementById('postBtn');
+  const composerNote = document.getElementById('composerNote');
+  const feed = document.getElementById('feed');
+  const supportModal = document.getElementById('supportModal');
+  const errorModal = document.getElementById('errorModal');
+
+  let mode = 'signup';
+
+  authSwitch.addEventListener('click', () => {
+    mode = mode === 'signup' ? 'login' : 'signup';
+    if (mode === 'login'){
+      authModeLabel.textContent = 'log in';
+      signupFields.style.display = 'none';
+      loginFields.style.display = 'block';
+      authSubmit.textContent = 'log in';
+      authSwitch.textContent = "new here? create an account";
+    } else {
+      authModeLabel.textContent = 'create an account';
+      signupFields.style.display = 'block';
+      loginFields.style.display = 'none';
+      authSubmit.textContent = 'create account';
+      authSwitch.textContent = 'already have an account? log in';
+    }
+    authError.style.display = 'none';
+  });
+
+  authSubmit.addEventListener('click', () => {
+    authError.style.display = 'none';
+    if (mode === 'signup'){
+      const u = document.getElementById('su-username').value.trim();
+      const e = document.getElementById('su-email').value.trim();
+      const p = document.getElementById('su-password').value;
+      if (!u || !e || !p){
+        showAuthError('fill in a username, email, and password to continue.');
+        return;
+      }
+      if (users[u]){
+        showAuthError('that username is already taken.');
+        return;
+      }
+      users[u] = {email: e, password: p};
+      strikes[u] = 0;
+      session = u;
+      enterApp();
+    } else {
+      const u = document.getElementById('li-username').value.trim();
+      const p = document.getElementById('li-password').value;
+      if (!users[u] || users[u].password !== p){
+        showAuthError('that username and password don\'t match.');
+        return;
+      }
+      session = u;
+      enterApp();
+    }
+  });
+
+  function showAuthError(msg){
+    authError.textContent = msg;
+    authError.style.display = 'block';
+  }
+
+  function enterApp(){
+    authView.style.display = 'none';
+    appView.style.display = 'block';
+    whoamiName.textContent = session;
+    renderFeed();
+  }
+
+  signOutBtn.addEventListener('click', () => {
+    session = null;
+    appView.style.display = 'none';
+    authView.style.display = 'block';
+  });
+
+  // ---------- posting ----------
+  postBtn.addEventListener('click', () => {
+    const text = postInput.value.trim();
+    composerNote.className = 'composer-note';
+    if (!text) return;
+
+    // occasional simulated server hiccup, just for demo of the soft-error behavior
+    if (Math.random() < 0.05){
+      errorModal.classList.add('show');
+      return;
+    }
+
+    if (containsAny(text, explicitWords)){
+      composerNote.textContent = "this can't be posted — vent. doesn't allow explicit (18+) content. try rephrasing.";
+      composerNote.classList.add('show','warn');
+      return;
+    }
+
+    const isBullying = containsAny(text, bullyWords);
+    const target = findTargetedUsername(text);
+    const isSelfHarm = containsAny(text, selfHarmWords);
+
+    if (isBullying){
+      strikes[session] = (strikes[session] || 0) + 1;
+      composerNote.textContent = "vent. auto-reply: please stop — targeting or insulting others isn't allowed here. (strike " + strikes[session] + ")";
+      composerNote.classList.add('show','warn');
+      // the post still gets logged so mods/bots could review it, but flagged
+    }
+
+    posts.unshift({
+      id: Date.now(),
+      author: session,
+      text: text,
+      ts: new Date(),
+      flaggedBullying: isBullying,
+      targetsUsername: target,
+      reported: false
+    });
+
+    postInput.value = '';
+    if (!isBullying) {
+      composerNote.classList.remove('show');
+    }
+    renderFeed();
+
+    if (isSelfHarm){
+      supportModal.classList.add('show');
+    }
+  });
+
+  document.getElementById('closeSupportModal').addEventListener('click', () => {
+    supportModal.classList.remove('show');
+  });
+  document.getElementById('closeErrorModal').addEventListener('click', () => {
+    errorModal.classList.remove('show');
+  });
+
+  function timeAgo(ts){
+    const s = Math.floor((Date.now() - ts.getTime())/1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s/60) + 'm ago';
+    return Math.floor(s/3600) + 'h ago';
+  }
+
+  function renderFeed(){
+    feed.innerHTML = '';
+    if (posts.length === 0){
+      feed.innerHTML = '<div class="empty-state">nothing here yet. the first post is yours to write.</div>';
+      return;
+    }
+    posts.forEach(p => {
+      const div = document.createElement('div');
+
+      // name-detector shielding: if the current user is the named target,
+      // they see an empty placeholder instead of the real content
+      const shielded = p.targetsUsername === session;
+
+      if (shielded){
+        div.className = 'post hidden-post';
+        div.innerHTML = `
+          <div class="post-meta"><span>${p.author}</span><span>${timeAgo(p.ts)}</span></div>
+          <div class="post-body">this post isn't shown to you.</div>
+        `;
+        feed.appendChild(div);
+        return;
+      }
+
+      div.className = 'post';
+      let actionsHtml = `
+        <div class="post-actions">
+          <button data-report="${p.id}">report</button>
+        </div>
+      `;
+      let replyHtml = '';
+      if (p.flaggedBullying){
+        replyHtml = `<div class="post-reply">vent. auto-reply: please stop — targeting or insulting others isn't allowed here.</div>`;
+      }
+      let reportedHtml = '';
+      if (p.reported){
+        reportedHtml = `<div class="post-reply" style="color:var(--muted);">reported — our automated review bots are looking at this first. it'll only reach a human if the bots can't resolve it.</div>`;
+      }
+
+      div.innerHTML = `
+        <div class="post-meta"><span>${p.author}</span><span>${timeAgo(p.ts)}</span></div>
+        <div class="post-body">${escapeHtml(p.text)}</div>
+        ${replyHtml}
+        ${reportedHtml}
+        ${actionsHtml}
+      `;
+      feed.appendChild(div);
+    });
+
+    feed.querySelectorAll('[data-report]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = Number(e.target.getAttribute('data-report'));
+        const post = posts.find(x => x.id === id);
+        if (post) post.reported = true;
+        renderFeed();
+      });
+    });
+  }
+
+  function escapeHtml(str){
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+})();
+</script>
+</body>
+</html>
