@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /feed.html
+
+Sitemap: https://vent-dun.vercel.app/sitemap.xml
