@@ -1,174 +1,134 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>vent. — new post</title>
-<link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Post - vent</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="wrap">
-  <div class="nav" id="nav"></div>
+    <div class="container">
+        <header id="nav-container"></header>
+        
+        <main class="composer-container">
+            <h2>Create a Post</h2>
+            <form id="postForm">
+                <div class="input-group">
+                    <label for="subventInput">Subvent (e.g. general, gaming, tech)</label>
+                    <input type="text" id="subventInput" placeholder="general" value="general">
+                </div>
+                
+                <div class="input-group">
+                    <label for="postText">What's on your mind?</label>
+                    <textarea id="postText" rows="5" placeholder="Vent here..." required></textarea>
+                </div>
 
-  <div class="card">
-    <textarea id="postInput" placeholder="what's on your mind?" autofocus></textarea>
-    <input type="file" id="postImageInput" accept="image/*" style="display:none;">
-    <div id="imagePreviewWrap" style="display:none; margin-top:10px;">
-      <img id="imagePreview" style="max-width:100%; border-radius:8px; display:block;">
-      <button type="button" id="removeImageBtn" style="margin-top:6px; background:none; color:var(--coral); padding:0; font-size:0.8rem;">remove image</button>
+                <div class="input-group">
+                    <label for="postImage">Attach Photo (optional)</label>
+                    <input type="file" id="postImage" accept="image/*">
+                </div>
+
+                <div id="imagePreviewContainer" style="display:none;">
+                    <img id="imagePreview" alt="Preview" style="max-width: 100%; max-height: 200px; border-radius: 8px;">
+                    <button type="button" id="removeImageBtn" class="secondary-btn">Remove Photo</button>
+                </div>
+
+                <p id="errorMsg" class="error-text" style="display:none;"></p>
+                
+                <button type="submit" class="primary-btn">Post</button>
+            </form>
+        </main>
     </div>
-    <div style="margin-top:10px;">
-      <button type="button" id="attachImageBtn" style="background:none; color:var(--sage); padding:0; font-size:0.85rem;">📷 attach a photo</button>
-    </div>
-    <div class="msg" id="composerNote"></div>
-    <button class="btn-primary" id="postBtn">post</button>
-    <button class="btn-link" onclick="window.location.href='feed.html'">cancel</button>
-  </div>
-</div>
 
-<div class="modal-backdrop" id="supportModal">
-  <div class="modal">
-    <h3>we saw that, and we're glad you shared it</h3>
-    <p>your post went through — nothing about this gets flagged or hidden. if things feel heavy right now, you don't have to carry it alone.</p>
-    <div class="resource">
-      <b>988 Suicide & Crisis Lifeline (US)</b>
-      call or text 988, available 24/7
-    </div>
-    <div class="resource">
-      <b>Crisis Text Line</b>
-      text HOME to 741741
-    </div>
-    <button id="closeSupportModal">go to feed</button>
-  </div>
-</div>
+    <script type="module">
+        import { db, auth } from './firebase.js';
+        import { collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.x.x/firebase-firestore.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.x.x/firebase-auth.js";
+        import { checkExplicit, checkBullying, checkSelfHarm, compressImage, buildNav, getQueryParam } from './vent.js';
 
-<div class="modal-backdrop" id="errorModal">
-  <div class="modal">
-    <h3>hang tight for a moment</h3>
-    <p>something on our end needs a second to catch up. nothing you wrote was lost — just wait a moment and try again.</p>
-    <button id="closeErrorModal">okay</button>
-  </div>
-</div>
+        buildNav();
 
-<script src="vent.js"></script>
-<script type="module">
-  import {
-    auth, db, onAuthStateChanged, signOut,
-    collection, addDoc, getDocs
-  } from './firebase.js';
+        let currentUser = null;
+        let compressedImageUrl = null;
 
-  let currentUsername = null;
-  let currentUid = null;
-  let selectedImageDataUrl = null;
-  let goToFeedAfterSupportModal = false;
+        // Auto-select subvent if passed in URL query parameters (e.g. post.html?subvent=books)
+        const urlSubvent = getQueryParam('subvent');
+        if (urlSubvent) {
+            document.getElementById('subventInput').value = urlSubvent;
+        }
 
-  onAuthStateChanged(auth, (user) => {
-    if (!user){
-      window.location.href = 'login.html';
-      return;
-    }
-    currentUsername = user.displayName || user.email;
-    currentUid = user.uid;
-    document.getElementById('nav').innerHTML = buildNavHtml(currentUsername);
-    const signOutBtn = document.getElementById('navSignOut');
-    if (signOutBtn){
-      signOutBtn.addEventListener('click', async () => {
-        await signOut(auth);
-        window.location.href = 'index.html';
-      });
-    }
-  });
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                window.location.href = 'login.html';
+                return;
+            }
+            const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.x.x/firebase-firestore.js");
+            const userSnap = await getDoc(doc(db, "users", user.uid));
+            if (userSnap.exists()) {
+                currentUser = { uid: user.uid, ...userSnap.data() };
+            }
+        });
 
-  document.getElementById('attachImageBtn').addEventListener('click', () => {
-    document.getElementById('postImageInput').click();
-  });
+        document.getElementById('postImage').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                try {
+                    compressedImageUrl = await compressImage(file, 700);
+                    document.getElementById('imagePreview').src = compressedImageUrl;
+                    document.getElementById('imagePreviewContainer').style.display = 'block';
+                } catch (err) {
+                    console.error("Image compression failed", err);
+                }
+            }
+        });
 
-  document.getElementById('postImageInput').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')){
-      alert('please choose an image file.');
-      return;
-    }
-    const note = document.getElementById('composerNote');
-    note.className = 'msg show calm';
-    note.textContent = 'compressing image...';
-    try {
-      const dataUrl = await compressImageToDataUrl(file, 900, 700 * 1024);
-      selectedImageDataUrl = dataUrl;
-      document.getElementById('imagePreview').src = dataUrl;
-      document.getElementById('imagePreviewWrap').style.display = 'block';
-      note.className = 'msg';
-    } catch (err){
-      note.className = 'msg show warn';
-      note.textContent = "that image couldn't be compressed small enough — try a smaller or simpler image.";
-    }
-  });
+        document.getElementById('removeImageBtn').addEventListener('click', () => {
+            compressedImageUrl = null;
+            document.getElementById('postImage').value = '';
+            document.getElementById('imagePreviewContainer').style.display = 'none';
+        });
 
-  document.getElementById('removeImageBtn').addEventListener('click', () => {
-    selectedImageDataUrl = null;
-    document.getElementById('postImageInput').value = '';
-    document.getElementById('imagePreviewWrap').style.display = 'none';
-  });
+        document.getElementById('postForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentUser) return;
 
-  document.getElementById('postBtn').addEventListener('click', async () => {
-    const input = document.getElementById('postInput');
-    const note = document.getElementById('composerNote');
-    note.className = 'msg';
-    const text = input.value.trim();
-    if (!text) return;
+            const text = document.getElementById('postText').value.trim();
+            const subventVal = document.getElementById('subventInput').value.trim().toLowerCase() || 'general';
+            const errorMsg = document.getElementById('errorMsg');
+            errorMsg.style.display = 'none';
 
-    if (Math.random() < 0.05){
-      document.getElementById('errorModal').classList.add('show');
-      return;
-    }
+            if (checkExplicit(text)) {
+                errorMsg.textContent = "Your post contains prohibited language.";
+                errorMsg.style.display = 'block';
+                return;
+            }
 
-    if (containsAny(text, explicitWords)){
-      note.textContent = "this can't be posted — vent. doesn't allow explicit (18+) content. try rephrasing.";
-      note.classList.add('show', 'warn');
-      return;
-    }
+            const isBullying = checkBullying(text);
+            const selfHarmDetected = checkSelfHarm(text);
 
-    const usernamesSnap = await getDocs(collection(db, 'usernames'));
-    const usernames = [];
-    usernamesSnap.forEach(d => usernames.push(d.id));
+            if (selfHarmDetected) {
+                alert("We noticed you might be going through a difficult time. Please know that support is available: Call or text 988 anytime.");
+            }
 
-    const isBullying = containsAny(text, bullyWords);
-    const target = findTargetedUsername(text, usernames, currentUsername);
-    const isSelfHarm = containsAny(text, selfHarmWords);
+            try {
+                await addDoc(collection(db, "posts"), {
+                    author: currentUser.username,
+                    authorUid: currentUser.uid,
+                    text: text,
+                    subvent: subventVal,
+                    imageUrl: compressedImageUrl || null,
+                    createdAt: serverTimestamp(),
+                    flaggedBullying: isBullying,
+                    reported: false
+                });
 
-    try {
-      await addDoc(collection(db, 'posts'), {
-        author: currentUsername,
-        authorUid: currentUid,
-        text: text,
-        imageUrl: selectedImageDataUrl,
-        createdAt: Date.now(),
-        flaggedBullying: isBullying,
-        targetsUsername: target,
-        reported: false
-      });
-    } catch (err){
-      document.getElementById('errorModal').classList.add('show');
-      return;
-    }
-
-    if (isSelfHarm){
-      goToFeedAfterSupportModal = true;
-      document.getElementById('supportModal').classList.add('show');
-      return;
-    }
-
-    window.location.href = 'feed.html';
-  });
-
-  document.getElementById('closeSupportModal').addEventListener('click', () => {
-    document.getElementById('supportModal').classList.remove('show');
-    if (goToFeedAfterSupportModal) window.location.href = 'feed.html';
-  });
-  document.getElementById('closeErrorModal').addEventListener('click', () => {
-    document.getElementById('errorModal').classList.remove('show');
-  });
-</script>
+                window.location.href = `feed.html?subvent=${subventVal}`;
+            } catch (err) {
+                console.error("Error writing post: ", err);
+                errorMsg.textContent = "Failed to publish post. Try again.";
+                errorMsg.style.display = 'block';
+            }
+        });
+    </script>
 </body>
 </html>
