@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vent. — profile</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .avatar-large{
+    width: 96px; height: 96px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--ink-soft);
+    border: 2px solid var(--line);
+    display: block;
+    margin: 0 auto 16px;
+  }
+  .avatar-placeholder{
+    width: 96px; height: 96px;
+    border-radius: 50%;
+    background: var(--ink-soft);
+    border: 2px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Source Serif 4', serif;
+    font-size: 2rem;
+    color: var(--muted);
+    margin: 0 auto 16px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="nav" id="nav"></div>
+
+  <div class="card" style="text-align:center;">
+    <div id="avatarWrap"></div>
+    <div style="font-size:0.95rem; color:var(--muted); margin-bottom:14px;" id="profileUsername"></div>
+
+    <input type="file" id="avatarInput" accept="image/*" style="display:none;">
+    <button class="btn-primary" id="chooseAvatarBtn" type="button">choose a profile picture</button>
+    <div class="msg" id="profileMsg"></div>
+  </div>
+</div>
+
+<script src="vent.js"></script>
+<script type="module">
+  import {
+    auth, db, storage, onAuthStateChanged, signOut, updateProfile,
+    doc, setDoc, ref, uploadBytes, getDownloadURL
+  } from './firebase.js';
+
+  let currentUser = null;
+
+  onAuthStateChanged(auth, (user) => {
+    if (!user){
+      window.location.href = 'login.html';
+      return;
+    }
+    currentUser = user;
+    const username = user.displayName || user.email;
+    document.getElementById('nav').innerHTML = buildNavHtml(username);
+    const signOutBtn = document.getElementById('navSignOut');
+    if (signOutBtn){
+      signOutBtn.addEventListener('click', async () => {
+        await signOut(auth);
+        window.location.href = 'index.html';
+      });
+    }
+    document.getElementById('profileUsername').textContent = username;
+    renderAvatar(user.photoURL);
+  });
+
+  function renderAvatar(url){
+    const wrap = document.getElementById('avatarWrap');
+    if (url){
+      wrap.innerHTML = `<img class="avatar-large" src="${url}" alt="profile picture">`;
+    } else {
+      const initial = (currentUser.displayName || currentUser.email || '?').charAt(0).toUpperCase();
+      wrap.innerHTML = `<div class="avatar-placeholder">${initial}</div>`;
+    }
+  }
+
+  document.getElementById('chooseAvatarBtn').addEventListener('click', () => {
+    document.getElementById('avatarInput').click();
+  });
+
+  document.getElementById('avatarInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const msg = document.getElementById('profileMsg');
+    msg.className = 'msg';
+
+    if (!file.type.startsWith('image/')){
+      msg.textContent = 'please choose an image file.';
+      msg.classList.add('show', 'warn');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024){
+      msg.textContent = 'that image is too large — please choose one under 5MB.';
+      msg.classList.add('show', 'warn');
+      return;
+    }
+
+    msg.textContent = 'uploading...';
+    msg.classList.add('show', 'calm');
+
+    try {
+      const fileRef = ref(storage, `avatars/${currentUser.uid}/${Date.now()}_${file.name}`);
+      await uploadBytes(fileRef, file);
+      const url = await getDownloadURL(fileRef);
+
+      await updateProfile(currentUser, { photoURL: url });
+      await setDoc(doc(db, 'users', currentUser.uid), { photoURL: url }, { merge: true });
+
+      renderAvatar(url);
+      msg.textContent = 'profile picture updated.';
+      msg.classList.remove('warn');
+      msg.classList.add('calm');
+    } catch (err){
+      msg.textContent = "couldn't upload that image — please try again.";
+      msg.classList.add('show', 'warn');
+    }
+  });
+</script>
+</body>
+</html>
