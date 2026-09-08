@@ -14,7 +14,7 @@
             <h2>Create a Post</h2>
             <form id="postForm">
                 <div class="input-group">
-                    <label for="subventInput">Subvent (e.g. general, gaming, tech)</label>
+                    <label for="subventInput">Subvent</label>
                     <input type="text" id="subventInput" placeholder="general" value="general">
                 </div>
                 
@@ -29,7 +29,7 @@
                 </div>
 
                 <div id="imagePreviewContainer" style="display:none;">
-                    <img id="imagePreview" alt="Preview" style="max-width: 100%; max-height: 200px; border-radius: 8px;">
+                    <img id="imagePreview" alt="Preview">
                     <button type="button" id="removeImageBtn" class="secondary-btn">Remove Photo</button>
                 </div>
 
@@ -51,7 +51,6 @@
         let currentUser = null;
         let compressedImageUrl = null;
 
-        // Auto-select subvent if passed in URL query parameters (e.g. post.html?subvent=books)
         const urlSubvent = getQueryParam('subvent');
         if (urlSubvent) {
             document.getElementById('subventInput').value = urlSubvent;
