@@ -59,41 +59,43 @@
 <script src="vent.js"></script>
 <script type="module">
   import {
-    auth, db, storage, onAuthStateChanged, signOut,
-    collection, addDoc, doc, getDoc, getDocs, query, orderBy, onSnapshot, updateDoc, deleteDoc,
-    ref, uploadBytes, getDownloadURL
+    auth, db, onAuthStateChanged, signOut,
+    collection, addDoc, doc, getDoc, getDocs, query, orderBy, onSnapshot, updateDoc, deleteDoc
   } from './firebase.js';
 
   const commentListeners = {}; // postId -> unsubscribe fn
   const openComments = {};     // postId -> bool (panel expanded)
-  let selectedImageFile = null;
+  let selectedImageDataUrl = null;
 
   document.getElementById('attachImageBtn').addEventListener('click', () => {
     document.getElementById('postImageInput').click();
   });
 
-  document.getElementById('postImageInput').addEventListener('change', (e) => {
+  document.getElementById('postImageInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     if (!file.type.startsWith('image/')){
       alert('please choose an image file.');
       return;
     }
-    if (file.size > 5 * 1024 * 1024){
-      alert('that image is too large — please choose one under 5MB.');
-      return;
-    }
-    selectedImageFile = file;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      document.getElementById('imagePreview').src = ev.target.result;
+    const note = document.getElementById('composerNote');
+    note.className = 'msg show calm';
+    note.textContent = 'compressing image...';
+    try {
+      // resized to fit under ~700KB so it stays well within Firestore's 1MB document limit
+      const dataUrl = await compressImageToDataUrl(file, 900, 700 * 1024);
+      selectedImageDataUrl = dataUrl;
+      document.getElementById('imagePreview').src = dataUrl;
       document.getElementById('imagePreviewWrap').style.display = 'block';
-    };
-    reader.readAsDataURL(file);
+      note.className = 'msg';
+    } catch (err){
+      note.className = 'msg show warn';
+      note.textContent = "that image couldn't be compressed small enough — try a smaller or simpler image.";
+    }
   });
 
   document.getElementById('removeImageBtn').addEventListener('click', () => {
-    selectedImageFile = null;
+    selectedImageDataUrl = null;
     document.getElementById('postImageInput').value = '';
     document.getElementById('imagePreviewWrap').style.display = 'none';
   });
@@ -155,18 +157,11 @@
     const isSelfHarm = containsAny(text, selfHarmWords);
 
     try {
-      let imageUrl = null;
-      if (selectedImageFile){
-        const fileRef = ref(storage, `posts/${currentUid}/${Date.now()}_${selectedImageFile.name}`);
-        await uploadBytes(fileRef, selectedImageFile);
-        imageUrl = await getDownloadURL(fileRef);
-      }
-
       await addDoc(collection(db, 'posts'), {
         author: currentUsername,
         authorUid: currentUid,
         text: text,
-        imageUrl: imageUrl,
+        imageUrl: selectedImageDataUrl,
         createdAt: Date.now(),
         flaggedBullying: isBullying,
         targetsUsername: target,
@@ -178,7 +173,7 @@
     }
 
     input.value = '';
-    selectedImageFile = null;
+    selectedImageDataUrl = null;
     document.getElementById('postImageInput').value = '';
     document.getElementById('imagePreviewWrap').style.display = 'none';
     if (isBullying){
