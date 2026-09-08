@@ -11,18 +11,18 @@
         <header id="nav-container"></header>
 
         <main class="feed-main">
-            <div class="feed-header-actions" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+            <div class="feed-header-actions">
                 <h2 id="feedTitle">Global Feed</h2>
-                <div style="display: flex; gap: 8px;">
-                    <button id="makeSubventBtn" class="secondary-btn" style="padding: 6px 14px;">+ Make Subvent</button>
-                    <a href="post.html" class="primary-btn" style="text-decoration: none; padding: 6px 14px; display: inline-flex; align-items: center;">+ New Post</a>
+                <div class="feed-action-buttons">
+                    <button id="makeSubventBtn" class="secondary-btn">+ Make Subvent</button>
+                    <a href="post.html" class="primary-btn">+ New Post</a>
                 </div>
             </div>
 
             <!-- Search and Subvent Controls -->
-            <div class="feed-controls" style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
-                <input type="text" id="searchInput" placeholder="Search posts..." style="flex: 1; min-width: 200px; padding: 8px; border-radius: 6px; border: 1px solid #ccc;">
-                <select id="subventFilter" style="padding: 8px; border-radius: 6px; border: 1px solid #ccc;">
+            <div class="feed-controls">
+                <input type="text" id="searchInput" placeholder="Search posts...">
+                <select id="subventFilter">
                     <option value="">All Subvents</option>
                     <option value="general">general</option>
                     <option value="gaming">gaming</option>
@@ -118,33 +118,32 @@
 
                     const card = document.createElement('div');
                     card.className = 'post-card';
-                    card.style.cssText = "background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 15px;";
 
-                    const subventTag = `<a href="feed.html?subvent=${post.subvent || 'general'}" style="background: #eee; color: #333; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; text-decoration: none;">#${post.subvent || 'general'}</a>`;
+                    const subventTag = `<a href="feed.html?subvent=${post.subvent || 'general'}" class="subvent-tag">#${post.subvent || 'general'}</a>`;
                     const dateStr = post.createdAt ? new Date(post.createdAt.seconds * 1000).toLocaleString() : 'Just now';
 
                     let htmlContent = `
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div class="post-header">
                             <strong>@${post.author}</strong>
-                            <div>
+                            <div class="post-meta">
                                 ${subventTag}
-                                <span style="font-size: 0.8rem; color: #666; margin-left: 8px;">${dateStr}</span>
+                                <span class="post-date">${dateStr}</span>
                             </div>
                         </div>
-                        <p style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(post.text)}</p>
+                        <p class="post-text">${escapeHtml(post.text)}</p>
                     `;
 
                     if (post.flaggedBullying) {
-                        htmlContent += `<div style="background: #fff3f3; color: #d00; padding: 6px; font-size: 0.85rem; margin-top: 8px; border-radius: 4px;">Automated note: Please keep comments supportive and avoid targeted hostility.</div>`;
+                        htmlContent += `<div class="moderation-notice">Automated note: Please keep comments supportive and avoid targeted hostility.</div>`;
                     }
 
                     if (post.imageUrl) {
-                        htmlContent += `<div style="margin-top: 10px;"><img src="${post.imageUrl}" style="max-width: 100%; border-radius: 6px;" /></div>`;
+                        htmlContent += `<div class="post-image-container"><img src="${post.imageUrl}" class="post-image" /></div>`;
                     }
 
                     const canDelete = currentAuthUser && (post.authorUid === currentAuthUser.uid || (!post.authorUid && currentUsername === post.author));
                     if (canDelete) {
-                        htmlContent += `<div style="margin-top: 10px; text-align: right;"><button class="delete-btn secondary-btn" data-id="${postId}" style="font-size: 0.8rem; padding: 3px 8px; color: #d00; border-color: #d00;">Delete</button></div>`;
+                        htmlContent += `<div class="post-actions"><button class="delete-btn secondary-btn" data-id="${postId}">Delete</button></div>`;
                     }
 
                     card.innerHTML = htmlContent;
@@ -169,7 +168,7 @@
 
             } catch (err) {
                 console.error("Error loading posts:", err);
-                container.innerHTML = '<p>Error loading feed. If this is a missing index error, check your browser console for the Firestore link to auto-create it.</p>';
+                container.innerHTML = '<p>Error loading feed. Check console for required Firestore index link.</p>';
             }
         }
 
