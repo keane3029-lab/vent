@@ -47,13 +47,13 @@
 <script src="vent.js"></script>
 <script type="module">
   import {
-    auth, db, storage, onAuthStateChanged, signOut, updateProfile,
-    doc, setDoc, ref, uploadBytes, getDownloadURL
+    auth, db, onAuthStateChanged, signOut,
+    doc, setDoc, getDoc
   } from './firebase.js';
 
   let currentUser = null;
 
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, async (user) => {
     if (!user){
       window.location.href = 'login.html';
       return;
@@ -69,13 +69,18 @@
       });
     }
     document.getElementById('profileUsername').textContent = username;
-    renderAvatar(user.photoURL);
+
+    // avatar is stored in Firestore (not Firebase Auth's photoURL), since
+    // compressed images can be larger than Auth's profile field comfortably allows
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    const photoData = userDoc.exists() ? userDoc.data().photoData : null;
+    renderAvatar(photoData);
   });
 
-  function renderAvatar(url){
+  function renderAvatar(dataUrl){
     const wrap = document.getElementById('avatarWrap');
-    if (url){
-      wrap.innerHTML = `<img class="avatar-large" src="${url}" alt="profile picture">`;
+    if (dataUrl){
+      wrap.innerHTML = `<img class="avatar-large" src="${dataUrl}" alt="profile picture">`;
     } else {
       const initial = (currentUser.displayName || currentUser.email || '?').charAt(0).toUpperCase();
       wrap.innerHTML = `<div class="avatar-placeholder">${initial}</div>`;
@@ -97,29 +102,21 @@
       msg.classList.add('show', 'warn');
       return;
     }
-    if (file.size > 5 * 1024 * 1024){
-      msg.textContent = 'that image is too large — please choose one under 5MB.';
-      msg.classList.add('show', 'warn');
-      return;
-    }
 
-    msg.textContent = 'uploading...';
+    msg.textContent = 'compressing and uploading...';
     msg.classList.add('show', 'calm');
 
     try {
-      const fileRef = ref(storage, `avatars/${currentUser.uid}/${Date.now()}_${file.name}`);
-      await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(fileRef);
+      // small size is enough for an avatar, keeps the Firestore doc tiny
+      const dataUrl = await compressImageToDataUrl(file, 300, 200 * 1024);
+      await setDoc(doc(db, 'users', currentUser.uid), { photoData: dataUrl }, { merge: true });
 
-      await updateProfile(currentUser, { photoURL: url });
-      await setDoc(doc(db, 'users', currentUser.uid), { photoURL: url }, { merge: true });
-
-      renderAvatar(url);
+      renderAvatar(dataUrl);
       msg.textContent = 'profile picture updated.';
       msg.classList.remove('warn');
       msg.classList.add('calm');
     } catch (err){
-      msg.textContent = "couldn't upload that image — please try again.";
+      msg.textContent = "that image couldn't be compressed small enough — try a smaller or simpler image.";
       msg.classList.add('show', 'warn');
     }
   });
