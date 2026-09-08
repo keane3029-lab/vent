@@ -33,6 +33,47 @@ function findTargetedUsername(text, usernames, exclude){
   return null;
 }
 
+// Resizes and compresses an image file into a small base64 data URL, so it
+// can be stored directly inside a Firestore document (no paid Storage needed).
+// Shrinks to maxDim on the longest side and lowers JPEG quality until the
+// result fits under maxBytes.
+function compressImageToDataUrl(file, maxDim, maxBytes){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e) => { img.src = e.target.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > height && width > maxDim){
+        height = Math.round(height * (maxDim / width));
+        width = maxDim;
+      } else if (height > maxDim){
+        width = Math.round(width * (maxDim / height));
+        height = maxDim;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+
+      let quality = 0.7;
+      let dataUrl = canvas.toDataURL('image/jpeg', quality);
+      while (dataUrl.length > maxBytes && quality > 0.2){
+        quality -= 0.1;
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+      }
+      if (dataUrl.length > maxBytes){
+        reject(new Error('too_large'));
+        return;
+      }
+      resolve(dataUrl);
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 // Builds the nav bar markup. username is null when signed out.
 function buildNavHtml(username){
   let linksHtml;
