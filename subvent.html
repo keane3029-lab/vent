@@ -11,14 +11,13 @@
         <header id="nav-container"></header>
 
         <main class="subvents-main">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+            <div class="feed-header-actions">
                 <h2>Explore Subvents</h2>
-                <button id="makeSubventBtn" class="primary-btn" style="padding: 6px 14px;">+ Make Subvent</button>
+                <button id="makeSubventBtn" class="primary-btn">+ Make Subvent</button>
             </div>
 
-            <!-- Subvent Search Input -->
             <div class="feed-controls" style="margin-bottom: 20px;">
-                <input type="text" id="searchSubventInput" placeholder="Search subvents..." style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ccc;">
+                <input type="text" id="searchSubventInput" placeholder="Search subvents..." style="width: 100%;">
             </div>
 
             <div id="subventsContainer">
@@ -34,9 +33,8 @@
 
         buildNav();
 
-        let allSubvents = new Set(['general', 'gaming', 'tech']); // Default fallbacks
+        let allSubvents = new Set(['general', 'gaming', 'tech']);
 
-        // Make Subvent action button
         document.getElementById('makeSubventBtn').addEventListener('click', () => {
             const subventName = prompt("Enter a name for the new subvent (e.g. books, art, fitness):");
             if (subventName) {
@@ -75,19 +73,18 @@
             }
 
             const grid = document.createElement('div');
-            grid.style.cssText = "display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px;";
+            grid.className = 'subvents-grid';
 
             subventList.forEach(subvent => {
                 const card = document.createElement('div');
                 card.className = 'subvent-card';
-                card.style.cssText = "background: #fff; border: 1px solid #ddd; padding: 20px; border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between;";
                 
                 card.innerHTML = `
                     <div>
-                        <h3 style="margin-bottom: 8px; color: #333;">#${subvent}</h3>
-                        <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">Browse posts and join conversations in #${subvent}.</p>
+                        <h3>#${subvent}</h3>
+                        <p>Browse posts and join conversations in #${subvent}.</p>
                     </div>
-                    <a href="feed.html?subvent=${subvent}" class="secondary-btn" style="text-align: center; text-decoration: none; padding: 6px; font-size: 0.9rem;">Visit Subvent</a>
+                    <a href="feed.html?subvent=${subvent}" class="secondary-btn" style="text-align: center; text-decoration: none;">Visit Subvent</a>
                 `;
                 grid.appendChild(card);
             });
@@ -95,7 +92,6 @@
             container.appendChild(grid);
         }
 
-        // Live filter for subvent search
         document.getElementById('searchSubventInput').addEventListener('input', (e) => {
             const term = e.target.value.toLowerCase();
             const filtered = Array.from(allSubvents).filter(s => s.includes(term));
