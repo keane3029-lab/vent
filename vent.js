@@ -1,95 +1,89 @@
-// Shared utilities and configuration for the vent site[cite: 1, 2]
+// vent. — shared moderation + rendering helpers (no storage logic here anymore —
+// accounts/posts are handled by Firebase, see firebase.js and each page's script).
 
-export const explicitWords = [
-    'spam-example'
-];
+const explicitWords = ['porn','nude','sex tape','xxx'];
+const bullyWords = ['idiot','loser','kill yourself','worthless','stupid ugly','retard'];
+const selfHarmWords = ['suicide','self-harm','self harm','kill myself','want to die','end it all'];
 
-export const bullyWords = [
-    'hate', 'idiot', 'loser', 'trash'
-];
-
-export const selfHarmWords = [
-    'suicide', 'kill myself', 'end my life', 'hurt myself'
-];
-
-export function checkExplicit(text) {
-    const lower = text.toLowerCase();
-    return explicitWords.some(word => lower.includes(word));
+function containsAny(text, list){
+  const lower = text.toLowerCase();
+  return list.some(w => lower.includes(w));
 }
 
-export function checkBullying(text) {
-    const lower = text.toLowerCase();
-    return bullyWords.some(word => lower.includes(word));
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
 }
 
-export function checkSelfHarm(text) {
-    const lower = text.toLowerCase();
-    return selfHarmWords.some(word => lower.includes(word));
+function timeAgo(ts){
+  const d = (ts && ts.toDate) ? ts.toDate() : new Date(ts || Date.now());
+  const s = Math.floor((Date.now() - d.getTime())/1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  return Math.floor(s/3600) + 'h ago';
 }
 
-export function getQueryParam(param) {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get(param);
+function findTargetedUsername(text, usernames, exclude){
+  const lower = text.toLowerCase();
+  for (const uname of usernames){
+    if (uname.toLowerCase() === (exclude||'').toLowerCase()) continue;
+    if (lower.includes(uname.toLowerCase())) return uname;
+  }
+  return null;
 }
 
-export async function compressImage(file, maxSizeKB = 700) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (event) => {
-            const img = new Image();
-            img.src = event.target.result;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
+// Resizes and compresses an image file into a small base64 data URL, so it
+// can be stored directly inside a Firestore document (no paid Storage needed).
+// Shrinks to maxDim on the longest side and lowers JPEG quality until the
+// result fits under maxBytes.
+function compressImageToDataUrl(file, maxDim, maxBytes){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e) => { img.src = e.target.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > height && width > maxDim){
+        height = Math.round(height * (maxDim / width));
+        width = maxDim;
+      } else if (height > maxDim){
+        width = Math.round(width * (maxDim / height));
+        height = maxDim;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
 
-                const maxDimension = 1000;
-                if (width > height && width > maxDimension) {
-                    height *= maxDimension / width;
-                    width = maxDimension;
-                } else if (height > maxDimension) {
-                    width *= maxDimension / height;
-                    height = maxDimension;
-                }
-
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-
-                let quality = 0.8;
-                let dataUrl = canvas.toDataURL('image/jpeg', quality);
-
-                while (dataUrl.length > maxSizeKB * 1024 && quality > 0.1) {
-                    quality -= 0.1;
-                    dataUrl = canvas.toDataURL('image/jpeg', quality);
-                }
-
-                resolve(dataUrl);
-            };
-            img.onerror = (error) => reject(error);
-        };
-        reader.onerror = (error) => reject(error);
-    });
+      let quality = 0.7;
+      let dataUrl = canvas.toDataURL('image/jpeg', quality);
+      while (dataUrl.length > maxBytes && quality > 0.2){
+        quality -= 0.1;
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+      }
+      if (dataUrl.length > maxBytes){
+        reject(new Error('too_large'));
+        return;
+      }
+      resolve(dataUrl);
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
-export function buildNav() {
-    const navContainer = document.getElementById('nav-container');
-    if (!navContainer) return;
-
-    navContainer.innerHTML = `
-        <nav style="display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid #eaeaea; margin-bottom: 20px;">
-            <div style="font-weight: bold; font-size: 1.2rem;">
-                <a href="feed.html" style="text-decoration: none; color: inherit;">vent</a>
-            </div>
-            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                <a href="feed.html">Feed</a>
-                <a href="subvent.html">Subvents</a>
-                <a href="post.html">Post</a>
-                <a href="profile.html">Profile</a>
-                <a href="about.html">About</a>
-            </div>
-        </nav>
-    `;
+// Builds the nav bar markup. username is null when signed out.
+function buildNavHtml(username){
+  let linksHtml;
+  if (username){
+    linksHtml = `<span>logged in as <b>${escapeHtml(username)}</b></span> · <a href="profile.html">profile</a> · <button id="navSignOut">sign out</button> · <a href="feed.html">feed</a>`;
+  } else {
+    linksHtml = `<a href="login.html">log in</a> · <a href="signup.html">sign up</a>`;
+  }
+  return `
+    <a class="logo" href="index.html">vent<span>.</span></a>
+    <div class="nav-links">${linksHtml} · <a href="about.html">about</a></div>
+  `;
 }
