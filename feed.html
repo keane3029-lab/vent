@@ -104,6 +104,13 @@
   }
 
   const VERIFIED_UIDS = ['fxsTaa7MLyZDq7VvhOh0X4fwr7n1'];
+  const ADMIN_UIDS = ['n5nH5V1us2Mp3owgC23kDc6lZAv1'];
+
+  function adminBadge(p){
+    return (p.authorUid && ADMIN_UIDS.includes(p.authorUid))
+      ? `<span class="admin-badge">ADMIN</span>`
+      : '';
+  }
 
   function verifiedBadge(p){
     return (p.authorUid && VERIFIED_UIDS.includes(p.authorUid))
@@ -142,7 +149,7 @@
       if (shielded){
         div.className = 'post hidden-post';
         div.innerHTML = `
-          <div class="post-meta"><span class="post-meta-left">${avatarHtml(p)}<span>${escapeHtml(p.author)}</span>${verifiedBadge(p)}</span><span>${timeAgo(p.createdAt)}</span></div>
+          <div class="post-meta"><span class="post-meta-left">${avatarHtml(p)}<span>${escapeHtml(p.author)}</span>${verifiedBadge(p)}${adminBadge(p)}</span><span>${timeAgo(p.createdAt)}</span></div>
           <div class="post-body">this post isn't shown to you.</div>
         `;
         feedEl.appendChild(div);
@@ -166,7 +173,7 @@
       const titleHtml = p.title ? `<div class="post-title">${escapeHtml(p.title)}</div>` : '';
 
       div.innerHTML = `
-        <div class="post-meta"><span class="post-meta-left">${avatarHtml(p)}<span>${escapeHtml(p.author)}</span>${verifiedBadge(p)}</span><span>${timeAgo(p.createdAt)}</span></div>
+        <div class="post-meta"><span class="post-meta-left">${avatarHtml(p)}<span>${escapeHtml(p.author)}</span>${verifiedBadge(p)}${adminBadge(p)}</span><span>${timeAgo(p.createdAt)}</span></div>
         ${titleHtml}
         <div class="post-body">${escapeHtml(p.text)}</div>
         ${imageHtml}
