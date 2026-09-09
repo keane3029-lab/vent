@@ -50,8 +50,10 @@
 <script type="module">
   import {
     auth, db, onAuthStateChanged, signOut,
-    collection, addDoc, doc, getDocs, query, orderBy, onSnapshot, updateDoc, deleteDoc
+    collection, addDoc, doc, getDoc, getDocs, query, orderBy, onSnapshot, updateDoc, deleteDoc
   } from './firebase.js';
+
+  const avatarCache = {}; // uid -> dataUrl | null (null = fetched but no pic)
 
   const commentListeners = {}; // postId -> unsubscribe fn
   const openComments = {};     // postId -> bool (panel expanded)
@@ -79,11 +81,34 @@
 
   function listenFeed(){
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
-    onSnapshot(q, (snap) => {
+    onSnapshot(q, async (snap) => {
       const posts = [];
       snap.forEach(d => posts.push({ id: d.id, ...d.data() }));
+      await loadMissingAvatars(posts);
       renderFeed(posts);
     });
+  }
+
+  async function loadMissingAvatars(posts){
+    const uidsToFetch = [...new Set(
+      posts.filter(p => p.authorUid && !(p.authorUid in avatarCache)).map(p => p.authorUid)
+    )];
+    await Promise.all(uidsToFetch.map(async (uid) => {
+      try {
+        const userSnap = await getDoc(doc(db, 'users', uid));
+        avatarCache[uid] = userSnap.exists() ? (userSnap.data().photoData || null) : null;
+      } catch (err) {
+        avatarCache[uid] = null;
+      }
+    }));
+  }
+
+  function avatarHtml(p){
+    const initial = (p.author || '?').charAt(0).toUpperCase();
+    const photo = p.authorUid ? avatarCache[p.authorUid] : null;
+    return photo
+      ? `<img class="avatar-mini" src="${photo}" alt="">`
+      : `<span class="avatar-mini-placeholder">${escapeHtml(initial)}</span>`;
   }
 
   document.getElementById('closeSupportModal').addEventListener('click', () => {
@@ -109,7 +134,7 @@
       if (shielded){
         div.className = 'post hidden-post';
         div.innerHTML = `
-          <div class="post-meta"><span>${escapeHtml(p.author)}</span><span>${timeAgo(p.createdAt)}</span></div>
+          <div class="post-meta"><span class="post-meta-left">${avatarHtml(p)}<span>${escapeHtml(p.author)}</span></span><span>${timeAgo(p.createdAt)}</span></div>
           <div class="post-body">this post isn't shown to you.</div>
         `;
         feedEl.appendChild(div);
@@ -133,7 +158,7 @@
       const titleHtml = p.title ? `<div class="post-title">${escapeHtml(p.title)}</div>` : '';
 
       div.innerHTML = `
-        <div class="post-meta"><span>${escapeHtml(p.author)}</span><span>${timeAgo(p.createdAt)}</span></div>
+        <div class="post-meta"><span class="post-meta-left">${avatarHtml(p)}<span>${escapeHtml(p.author)}</span></span><span>${timeAgo(p.createdAt)}</span></div>
         ${titleHtml}
         <div class="post-body">${escapeHtml(p.text)}</div>
         ${imageHtml}
