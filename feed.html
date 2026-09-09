@@ -130,8 +130,11 @@
         ? `<img src="${p.imageUrl}" style="max-width:100%; border-radius:8px; margin-top:10px; display:block;" alt="attached image">`
         : '';
 
+      const titleHtml = p.title ? `<div class="post-title">${escapeHtml(p.title)}</div>` : '';
+
       div.innerHTML = `
         <div class="post-meta"><span>${escapeHtml(p.author)}</span><span>${timeAgo(p.createdAt)}</span></div>
+        ${titleHtml}
         <div class="post-body">${escapeHtml(p.text)}</div>
         ${imageHtml}
         ${replyHtml}

@@ -11,7 +11,8 @@
   <div class="nav" id="nav"></div>
 
   <div class="card">
-    <textarea id="postInput" placeholder="what's on your mind?" autofocus></textarea>
+    <input type="text" id="postTitleInput" placeholder="give it a title (optional)" maxlength="80" style="margin-bottom:10px;">
+    <textarea id="postInput" placeholder="what's on your mind?"></textarea>
     <input type="file" id="postImageInput" accept="image/*" style="display:none;">
     <div id="imagePreviewWrap" style="display:none; margin-top:10px;">
       <img id="imagePreview" style="max-width:100%; border-radius:8px; display:block;">
@@ -112,9 +113,11 @@
   });
 
   document.getElementById('postBtn').addEventListener('click', async () => {
+    const titleInput = document.getElementById('postTitleInput');
     const input = document.getElementById('postInput');
     const note = document.getElementById('composerNote');
     note.className = 'msg';
+    const title = titleInput.value.trim();
     const text = input.value.trim();
     if (!text) return;
 
@@ -123,7 +126,7 @@
       return;
     }
 
-    if (containsAny(text, explicitWords)){
+    if (containsAny(text, explicitWords) || (title && containsAny(title, explicitWords))){
       note.textContent = "this can't be posted — vent. doesn't allow explicit (18+) content. try rephrasing.";
       note.classList.add('show', 'warn');
       return;
@@ -133,14 +136,15 @@
     const usernames = [];
     usernamesSnap.forEach(d => usernames.push(d.id));
 
-    const isBullying = containsAny(text, bullyWords);
-    const target = findTargetedUsername(text, usernames, currentUsername);
-    const isSelfHarm = containsAny(text, selfHarmWords);
+    const isBullying = containsAny(text, bullyWords) || (title && containsAny(title, bullyWords));
+    const target = findTargetedUsername(text, usernames, currentUsername) || (title ? findTargetedUsername(title, usernames, currentUsername) : null);
+    const isSelfHarm = containsAny(text, selfHarmWords) || (title && containsAny(title, selfHarmWords));
 
     try {
       await addDoc(collection(db, 'posts'), {
         author: currentUsername,
         authorUid: currentUid,
+        title: title || null,
         text: text,
         imageUrl: selectedImageDataUrl,
         createdAt: Date.now(),
