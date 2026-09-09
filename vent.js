@@ -74,11 +74,16 @@ function compressImageToDataUrl(file, maxDim, maxBytes){
   });
 }
 
+// UIDs allowed to see the moderation/review link + dashboard
+const MODERATOR_UIDS = ['fxsTaa7MLyZDq7VvhOh0X4fwr7n1', 'n5nH5V1us2Mp3owgC23kDc6lZAv1'];
+
 // Builds the nav bar markup. username is null when signed out.
-function buildNavHtml(username){
+// uid is optional — when it's a moderator's uid, a "review" link is added.
+function buildNavHtml(username, uid){
   let linksHtml;
   if (username){
-    linksHtml = `<span>logged in as <b>${escapeHtml(username)}</b></span> · <a href="profile.html">profile</a> · <button id="navSignOut">sign out</button> · <a href="feed.html">feed</a>`;
+    const reviewLink = (uid && MODERATOR_UIDS.includes(uid)) ? ` · <a href="moderation.html">review</a>` : '';
+    linksHtml = `<span>logged in as <b>${escapeHtml(username)}</b></span> · <a href="profile.html">profile</a> · <button id="navSignOut">sign out</button> · <a href="feed.html">feed</a>${reviewLink}`;
   } else {
     linksHtml = `<a href="login.html">log in</a> · <a href="signup.html">sign up</a>`;
   }

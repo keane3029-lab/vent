@@ -31,7 +31,7 @@
   import { auth, onAuthStateChanged } from './firebase.js';
   onAuthStateChanged(auth, (user) => {
     const username = user ? (user.displayName || user.email) : null;
-    document.getElementById('nav').innerHTML = buildNavHtml(username);
+    document.getElementById('nav').innerHTML = buildNavHtml(username, user ? user.uid : null);
     const btn = document.getElementById('navSignOut');
     if (btn){
       import('./firebase.js').then(({ auth, signOut }) => {

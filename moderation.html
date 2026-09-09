@@ -3,52 +3,54 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Review — vent.</title>
+<title>vent. — review</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="wrap">
-  <header id="nav-container"></header>
+  <div class="nav" id="nav"></div>
 
-  <h2 class="feed-heading">reported posts</h2>
+  <div class="feed-heading">reported posts</div>
 
   <div id="gate" class="empty-state">checking access...</div>
+  <div id="reportsList"></div>
 
-  <div id="modArea" style="display:none;">
-    <div id="reportsList"></div>
+  <div class="footer-note">
+    an idea for a place to vent — not a published product.
   </div>
 </div>
 
+<script src="vent.js"></script>
 <script type="module">
   import {
-    auth, db, onAuthStateChanged,
+    auth, db, onAuthStateChanged, signOut,
     collection, doc, getDoc, getDocs, query, where, deleteDoc, updateDoc
   } from './firebase.js';
-  import { buildNav } from './vent.js';
-
-  buildNav();
-
-  const MODERATOR_USERNAMES = ['vent. Official Account', 'bigbackskyahh'];
 
   const gate = document.getElementById('gate');
-  const modArea = document.getElementById('modArea');
   const reportsList = document.getElementById('reportsList');
 
-  onAuthStateChanged(auth, async (user) => {
+  onAuthStateChanged(auth, (user) => {
     if (!user){
-      gate.textContent = "you need to be logged in to view this page.";
+      window.location.href = 'login.html';
       return;
     }
-    const userSnap = await getDoc(doc(db, 'users', user.uid));
-    const username = userSnap.exists() ? userSnap.data().username : null;
+    const username = user.displayName || user.email;
+    document.getElementById('nav').innerHTML = buildNavHtml(username, user.uid);
+    const signOutBtn = document.getElementById('navSignOut');
+    if (signOutBtn){
+      signOutBtn.addEventListener('click', async () => {
+        await signOut(auth);
+        window.location.href = 'index.html';
+      });
+    }
 
-    if (!MODERATOR_USERNAMES.includes(username)){
+    if (!MODERATOR_UIDS.includes(user.uid)){
       gate.textContent = "this page is for moderators only.";
       return;
     }
 
     gate.style.display = 'none';
-    modArea.style.display = 'block';
     loadReports();
   });
 
@@ -83,10 +85,9 @@
       card.className = 'post';
 
       const titleHtml = post.title ? `<div class="post-title">${escapeHtml(post.title)}</div>` : '';
-      const dateStr = post.createdAt ? timeAgoSimple(post.createdAt) : '';
 
       card.innerHTML = `
-        <div class="post-meta"><span>${escapeHtml(post.author || 'unknown')}</span><span>${dateStr}</span></div>
+        <div class="post-meta"><span>${escapeHtml(post.author || 'unknown')}</span><span>${timeAgo(post.createdAt)}</span></div>
         ${titleHtml}
         <div class="post-body">${escapeHtml(post.text || '')}</div>
         <div class="post-reply">author email: ${escapeHtml(authorEmail)}</div>
@@ -120,21 +121,6 @@
     if (!reportsList.querySelector('.post')){
       reportsList.innerHTML = '<p class="empty-state">no reported posts right now. all clear.</p>';
     }
-  }
-
-  function timeAgoSimple(createdAt){
-    const ms = Date.now() - createdAt;
-    const hrs = Math.floor(ms / 3600000);
-    if (hrs < 1) return 'just now';
-    if (hrs < 24) return hrs + 'h ago';
-    return Math.floor(hrs / 24) + 'd ago';
-  }
-
-  function escapeHtml(str){
-    return String(str)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
   }
 </script>
 </body>

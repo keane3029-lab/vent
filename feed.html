@@ -68,7 +68,7 @@
     }
     currentUsername = user.displayName || user.email;
     currentUid = user.uid;
-    document.getElementById('nav').innerHTML = buildNavHtml(currentUsername);
+    document.getElementById('nav').innerHTML = buildNavHtml(currentUsername, currentUid);
     const signOutBtn = document.getElementById('navSignOut');
     if (signOutBtn){
       signOutBtn.addEventListener('click', async () => {
