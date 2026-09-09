@@ -198,6 +198,11 @@ button:active{ transform: scale(0.98); }
   color: var(--muted);
   flex-shrink:0;
 }
+.verified-badge{
+  margin-left: 3px;
+  vertical-align: middle;
+  flex-shrink:0;
+}
 .post-title{
   font-family:'Source Serif 4', serif;
   font-size: 1.15rem;

@@ -103,6 +103,14 @@
     }));
   }
 
+  const VERIFIED_UIDS = ['fxsTaa7MLyZDq7VvhOh0X4fwr7n1'];
+
+  function verifiedBadge(p){
+    return (p.authorUid && VERIFIED_UIDS.includes(p.authorUid))
+      ? `<svg class="verified-badge" viewBox="0 0 20 20" width="14" height="14"><circle cx="10" cy="10" r="10" fill="#8aa399"/><path d="M6 10.5l2.5 2.5L14 7.5" stroke="#1b2430" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+      : '';
+  }
+
   function avatarHtml(p){
     const initial = (p.author || '?').charAt(0).toUpperCase();
     const photo = p.authorUid ? avatarCache[p.authorUid] : null;
@@ -134,7 +142,7 @@
       if (shielded){
         div.className = 'post hidden-post';
         div.innerHTML = `
-          <div class="post-meta"><span class="post-meta-left">${avatarHtml(p)}<span>${escapeHtml(p.author)}</span></span><span>${timeAgo(p.createdAt)}</span></div>
+          <div class="post-meta"><span class="post-meta-left">${avatarHtml(p)}<span>${escapeHtml(p.author)}</span>${verifiedBadge(p)}</span><span>${timeAgo(p.createdAt)}</span></div>
           <div class="post-body">this post isn't shown to you.</div>
         `;
         feedEl.appendChild(div);
@@ -158,7 +166,7 @@
       const titleHtml = p.title ? `<div class="post-title">${escapeHtml(p.title)}</div>` : '';
 
       div.innerHTML = `
-        <div class="post-meta"><span class="post-meta-left">${avatarHtml(p)}<span>${escapeHtml(p.author)}</span></span><span>${timeAgo(p.createdAt)}</span></div>
+        <div class="post-meta"><span class="post-meta-left">${avatarHtml(p)}<span>${escapeHtml(p.author)}</span>${verifiedBadge(p)}</span><span>${timeAgo(p.createdAt)}</span></div>
         ${titleHtml}
         <div class="post-body">${escapeHtml(p.text)}</div>
         ${imageHtml}
