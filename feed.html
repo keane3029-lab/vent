@@ -50,7 +50,7 @@
 <script type="module">
   import {
     auth, db, onAuthStateChanged, signOut,
-    collection, addDoc, doc, getDoc, getDocs, query, orderBy, onSnapshot, updateDoc, deleteDoc
+    collection, addDoc, doc, getDoc, getDocs, query, orderBy, onSnapshot, updateDoc, deleteDoc, arrayUnion
   } from './firebase.js';
 
   const avatarCache = {}; // uid -> dataUrl | null (null = fetched but no pic)
@@ -60,6 +60,8 @@
 
   let currentUsername = null;
   let currentUid = null;
+  let blockedUids = [];
+  let unsubscribeFeed = null;
 
   onAuthStateChanged(auth, async (user) => {
     if (!user){
@@ -76,16 +78,21 @@
         window.location.href = 'index.html';
       });
     }
+    const myUserSnap = await getDoc(doc(db, 'users', currentUid));
+    blockedUids = (myUserSnap.exists() && Array.isArray(myUserSnap.data().blocked)) ? myUserSnap.data().blocked : [];
+
     listenFeed();
   });
 
   function listenFeed(){
+    if (unsubscribeFeed) unsubscribeFeed();
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
-    onSnapshot(q, async (snap) => {
+    unsubscribeFeed = onSnapshot(q, async (snap) => {
       const posts = [];
       snap.forEach(d => posts.push({ id: d.id, ...d.data() }));
-      await loadMissingAvatars(posts);
-      renderFeed(posts);
+      const visiblePosts = posts.filter(p => !p.authorUid || !blockedUids.includes(p.authorUid));
+      await loadMissingAvatars(visiblePosts);
+      renderFeed(visiblePosts);
     });
   }
 
@@ -219,6 +226,17 @@
         }
       });
     }
+    const blockBtn = card.querySelector('[data-block]');
+    if (blockBtn){
+      blockBtn.addEventListener('click', async (e) => {
+        const uidToBlock = e.target.getAttribute('data-block');
+        const name = e.target.getAttribute('data-block-name');
+        if (!confirm(`block ${name}? you won't see their posts anymore. you can undo this from your profile page.`)) return;
+        await updateDoc(doc(db, 'users', currentUid), { blocked: arrayUnion(uidToBlock) });
+        blockedUids.push(uidToBlock);
+        listenFeed();
+      });
+    }
   }
 
 
@@ -256,6 +274,7 @@
                     || (!p.authorUid && p.author === currentUsername);
       const deleteHtml = isOwn ? `<button data-delete="${p.id}">delete</button>` : '';
       const editHtml = isOwn ? `<button data-edit="${p.id}">edit</button>` : '';
+      const blockHtml = (!isOwn && p.authorUid) ? `<button data-block="${p.authorUid}" data-block-name="${escapeHtml(p.author||'this user')}">block</button>` : '';
       const imageHtml = p.imageUrl
         ? `<img src="${p.imageUrl}" style="max-width:100%; border-radius:8px; margin-top:10px; display:block;" alt="attached image">`
         : '';
@@ -276,6 +295,7 @@
           <button data-toggle-comments="${p.id}">comments</button>
           ${editHtml}
           ${deleteHtml}
+          ${blockHtml}
         </div>
         <div class="comments-panel" id="comments-${p.id}">
           <div class="comment-list" id="comment-list-${p.id}"></div>
@@ -294,6 +314,17 @@
       btn.addEventListener('click', async (e) => {
         const id = e.target.getAttribute('data-report');
         await updateDoc(doc(db, 'posts', id), { reported: true });
+      });
+    });
+
+    feedEl.querySelectorAll('[data-block]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const uidToBlock = e.target.getAttribute('data-block');
+        const name = e.target.getAttribute('data-block-name');
+        if (!confirm(`block ${name}? you won't see their posts anymore. you can undo this from your profile page.`)) return;
+        await updateDoc(doc(db, 'users', currentUid), { blocked: arrayUnion(uidToBlock) });
+        blockedUids.push(uidToBlock);
+        listenFeed();
       });
     });
 

@@ -42,13 +42,18 @@
     <button class="btn-primary" id="chooseAvatarBtn" type="button">choose a profile picture</button>
     <div class="msg" id="profileMsg"></div>
   </div>
+
+  <div class="card">
+    <div class="feed-heading" style="margin-bottom:10px;">blocked users</div>
+    <div id="blockedList"><p class="empty-state">loading...</p></div>
+  </div>
 </div>
 
 <script src="vent.js"></script>
 <script type="module">
   import {
     auth, db, onAuthStateChanged, signOut,
-    doc, setDoc, getDoc
+    doc, setDoc, getDoc, updateDoc, arrayRemove
   } from './firebase.js';
 
   let currentUser = null;
@@ -75,7 +80,36 @@
     const userDoc = await getDoc(doc(db, 'users', user.uid));
     const photoData = userDoc.exists() ? userDoc.data().photoData : null;
     renderAvatar(photoData);
+
+    const blocked = (userDoc.exists() && Array.isArray(userDoc.data().blocked)) ? userDoc.data().blocked : [];
+    renderBlockedList(blocked);
   });
+
+  async function renderBlockedList(blockedUids){
+    const listEl = document.getElementById('blockedList');
+    if (blockedUids.length === 0){
+      listEl.innerHTML = '<p class="empty-state">you haven\'t blocked anyone.</p>';
+      return;
+    }
+    listEl.innerHTML = '';
+    for (const uid of blockedUids){
+      let name = 'unknown user';
+      try {
+        const snap = await getDoc(doc(db, 'users', uid));
+        if (snap.exists() && snap.data().username) name = snap.data().username;
+      } catch(err){ /* keep 'unknown user' */ }
+
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--line);';
+      row.innerHTML = `<span>${escapeHtml(name)}</span><button data-unblock="${uid}" style="background:none; color:var(--coral); padding:0; font-size:0.85rem;">unblock</button>`;
+      row.querySelector('[data-unblock]').addEventListener('click', async () => {
+        await updateDoc(doc(db, 'users', currentUser.uid), { blocked: arrayRemove(uid) });
+        row.remove();
+        if (!listEl.querySelector('div')) listEl.innerHTML = '<p class="empty-state">you haven\'t blocked anyone.</p>';
+      });
+      listEl.appendChild(row);
+    }
+  }
 
   function renderAvatar(dataUrl){
     const wrap = document.getElementById('avatarWrap');
