@@ -55,7 +55,7 @@
 <script type="module">
   import {
     auth, db, onAuthStateChanged, signOut,
-    collection, addDoc, getDocs
+    collection, addDoc, getDocs, doc, updateDoc
   } from './firebase.js';
 
   let currentUsername = null;
@@ -121,6 +121,14 @@
     const text = input.value.trim();
     if (!text) return;
 
+    const lastPost = Number(localStorage.getItem('vent_lastPostAt') || 0);
+    const waitLeft = 20000 - (Date.now() - lastPost);
+    if (waitLeft > 0){
+      note.textContent = `slow down a bit — you can post again in ${Math.ceil(waitLeft/1000)}s.`;
+      note.classList.add('show', 'warn');
+      return;
+    }
+
     if (Math.random() < 0.05){
       document.getElementById('errorModal').classList.add('show');
       return;
@@ -152,7 +160,14 @@
         targetsUsername: target,
         reported: false
       });
+      await updateDoc(doc(db, 'users', currentUid), { lastPostAt: Date.now() });
+      localStorage.setItem('vent_lastPostAt', String(Date.now()));
     } catch (err){
+      if (err.code === 'permission-denied'){
+        note.textContent = "slow down a bit — you're posting too fast. try again in a few seconds.";
+        note.classList.add('show', 'warn');
+        return;
+      }
       document.getElementById('errorModal').classList.add('show');
       return;
     }
