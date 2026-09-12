@@ -24,6 +24,8 @@ import {
   onSnapshot,
   updateDoc,
   deleteDoc,
+  arrayUnion,
+  arrayRemove,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
@@ -43,5 +45,5 @@ const db = getFirestore(app);
 export {
   app, auth, db,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile,
-  collection, doc, setDoc, getDoc, getDocs, addDoc, query, where, orderBy, onSnapshot, updateDoc, deleteDoc, serverTimestamp
+  collection, doc, setDoc, getDoc, getDocs, addDoc, query, where, orderBy, onSnapshot, updateDoc, deleteDoc, arrayUnion, arrayRemove, serverTimestamp
 };

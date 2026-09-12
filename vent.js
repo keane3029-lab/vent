@@ -87,8 +87,37 @@ function buildNavHtml(username, uid){
   } else {
     linksHtml = `<a href="login.html">log in</a> · <a href="signup.html">sign up</a>`;
   }
+  const themeIcon = getTheme() === 'light' ? '🌙' : '☀️';
   return `
     <a class="logo" href="index.html">vent<span>.</span></a>
-    <div class="nav-links">${linksHtml} · <a href="about.html">about</a></div>
+    <div class="nav-links">${linksHtml} · <a href="about.html">about</a> · <button id="themeToggleBtn" type="button" title="toggle theme">${themeIcon}</button></div>
   `;
 }
+
+// Theme handling — dark is the default, light is opt-in and remembered
+// per-browser via localStorage. A tiny inline script in each page's <head>
+// applies the saved theme before the page paints, so there's no flash.
+function getTheme(){
+  try { return localStorage.getItem('vent_theme') || 'dark'; } catch(err){ return 'dark'; }
+}
+
+function applyTheme(theme){
+  if (theme === 'light'){
+    document.documentElement.setAttribute('data-theme', 'light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+}
+
+function toggleTheme(){
+  const next = getTheme() === 'light' ? 'dark' : 'light';
+  try { localStorage.setItem('vent_theme', next); } catch(err){ /* ignore, just won't persist */ }
+  applyTheme(next);
+  const btn = document.getElementById('themeToggleBtn');
+  if (btn) btn.textContent = next === 'light' ? '🌙' : '☀️';
+}
+
+applyTheme(getTheme());
+document.addEventListener('click', function(e){
+  if (e.target && e.target.id === 'themeToggleBtn') toggleTheme();
+});

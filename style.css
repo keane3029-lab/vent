@@ -10,12 +10,29 @@
   --sage:#8aa399;
   --muted:#8d97a8;
   --line: rgba(246,241,231,0.14);
+  /* page-bg/page-text control the overall page, separately from --ink/--paper
+     which are locked to the "paper card on dark background" look — those
+     stay the same in both themes so posts always read the same way */
+  --page-bg: var(--ink);
+  --page-text: var(--paper);
 }
+
+/* Light theme overrides — applied when <html data-theme="light">.
+   Post cards, the modal, and coral/sage accents stay identical in both
+   themes; only the page chrome (background, nav text, form fields) flips. */
+[data-theme="light"]{
+  --page-bg: #ece4d3;
+  --page-text: #1b2430;
+  --ink-soft: #efe6d4;
+  --muted: #6b7280;
+  --line: rgba(27,36,48,0.14);
+}
+
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;}
 body{
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--page-bg);
+  color: var(--page-text);
   font-family: 'Inter', system-ui, sans-serif;
   min-height:100vh;
   display:flex;
@@ -42,7 +59,7 @@ a{ color: var(--sage); }
   font-family:'Source Serif 4', serif;
   font-size:1.4rem;
   text-decoration:none;
-  color: var(--paper);
+  color: var(--page-text);
 }
 .nav .logo span{ color: var(--coral); }
 .nav .nav-links{
@@ -61,7 +78,7 @@ a{ color: var(--sage); }
   cursor:pointer;
   padding:0;
 }
-.nav .nav-links b{ color: var(--paper); }
+.nav .nav-links b{ color: var(--page-text); }
 
 .hero{
   font-family:'Source Serif 4', serif;
@@ -92,9 +109,9 @@ a{ color: var(--sage); }
 }
 input[type=text], input[type=email], input[type=password], textarea{
   width:100%;
-  background: var(--ink);
+  background: var(--ink-soft);
   border: 1px solid var(--line);
-  color: var(--paper);
+  color: var(--page-text);
   border-radius: 7px;
   padding: 10px 12px;
   font-family: inherit;
@@ -203,6 +220,18 @@ button:active{ transform: scale(0.98); }
   vertical-align: middle;
   flex-shrink:0;
 }
+.admin-badge{
+  margin-left: 5px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: var(--coral);
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink:0;
+}
 .post-title{
   font-family:'Source Serif 4', serif;
   font-size: 1.15rem;
@@ -282,9 +311,9 @@ button:active{ transform: scale(0.98); }
 }
 .comment-composer input{
   flex:1;
-  background: var(--ink);
+  background: var(--ink-soft);
   border: 1px solid var(--line);
-  color: var(--paper);
+  color: var(--page-text);
   border-radius: 6px;
   padding: 8px 10px;
   font-size: 0.85rem;
