@@ -50,7 +50,7 @@
 <script type="module">
   import {
     auth, db, onAuthStateChanged, signOut,
-    collection, addDoc, doc, getDoc, getDocs, query, orderBy, onSnapshot, updateDoc, deleteDoc, arrayUnion
+    collection, addDoc, doc, getDoc, getDocs, query, orderBy, onSnapshot, updateDoc, deleteDoc
   } from './firebase.js';
 
   const avatarCache = {}; // uid -> dataUrl | null (null = fetched but no pic)
@@ -60,8 +60,6 @@
 
   let currentUsername = null;
   let currentUid = null;
-  let blockedUids = [];
-  let unsubscribeFeed = null;
 
   onAuthStateChanged(auth, async (user) => {
     if (!user){
@@ -78,21 +76,16 @@
         window.location.href = 'index.html';
       });
     }
-    const myUserSnap = await getDoc(doc(db, 'users', currentUid));
-    blockedUids = (myUserSnap.exists() && Array.isArray(myUserSnap.data().blocked)) ? myUserSnap.data().blocked : [];
-
     listenFeed();
   });
 
   function listenFeed(){
-    if (unsubscribeFeed) unsubscribeFeed();
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
-    unsubscribeFeed = onSnapshot(q, async (snap) => {
+    onSnapshot(q, async (snap) => {
       const posts = [];
       snap.forEach(d => posts.push({ id: d.id, ...d.data() }));
-      const visiblePosts = posts.filter(p => !p.authorUid || !blockedUids.includes(p.authorUid));
-      await loadMissingAvatars(visiblePosts);
-      renderFeed(visiblePosts);
+      await loadMissingAvatars(posts);
+      renderFeed(posts);
     });
   }
 
@@ -111,13 +104,6 @@
   }
 
   const VERIFIED_UIDS = ['fxsTaa7MLyZDq7VvhOh0X4fwr7n1'];
-  const ADMIN_UIDS = ['n5nH5V1us2Mp3owgC23kDc6lZAv1'];
-
-  function adminBadge(p){
-    return (p.authorUid && ADMIN_UIDS.includes(p.authorUid))
-      ? `<span class="admin-badge">ADMIN</span>`
-      : '';
-  }
 
   function verifiedBadge(p){
     return (p.authorUid && VERIFIED_UIDS.includes(p.authorUid))
@@ -140,106 +126,6 @@
     document.getElementById('errorModal').classList.remove('show');
   });
 
-  function enterEditMode(postId, card){
-    const titleWrap = card.querySelector(`[data-title-wrap="${postId}"]`);
-    const bodyEl = card.querySelector(`[data-body="${postId}"]`);
-    const actionsEl = card.querySelector(`[data-actions="${postId}"]`);
-    const rawTitle = card.dataset.rawTitle || '';
-    const rawText = card.dataset.rawText || '';
-
-    const savedTitleHtml = titleWrap.innerHTML;
-    const savedBodyHtml = bodyEl.innerHTML;
-    const savedActionsHtml = actionsEl.innerHTML;
-
-    titleWrap.innerHTML = `<input type="text" class="edit-title-input" value="${rawTitle.replace(/"/g,'&quot;')}" placeholder="title (optional)" maxlength="80" style="margin-bottom:8px;">`;
-    bodyEl.innerHTML = `<textarea class="edit-body-input">${escapeHtml(rawText)}</textarea>`;
-    actionsEl.innerHTML = `
-      <button data-save-edit="${postId}">save</button>
-      <button data-cancel-edit="${postId}">cancel</button>
-    `;
-
-    actionsEl.querySelector('[data-cancel-edit]').addEventListener('click', () => {
-      titleWrap.innerHTML = savedTitleHtml;
-      bodyEl.innerHTML = savedBodyHtml;
-      actionsEl.innerHTML = savedActionsHtml;
-      rewireCardActions(card);
-    });
-
-    actionsEl.querySelector('[data-save-edit]').addEventListener('click', async () => {
-      const newTitle = card.querySelector('.edit-title-input').value.trim();
-      const newText = card.querySelector('.edit-body-input').value.trim();
-      if (!newText) return;
-
-      if (containsAny(newText, explicitWords) || (newTitle && containsAny(newTitle, explicitWords))){
-        alert("this can't be saved — vent. doesn't allow explicit (18+) content. try rephrasing.");
-        return;
-      }
-
-      try {
-        await updateDoc(doc(db, 'posts', postId), {
-          text: newText,
-          title: newTitle || null,
-          edited: true
-        });
-        card.dataset.rawText = newText;
-        card.dataset.rawTitle = newTitle;
-      } catch (err){
-        alert("couldn't save the edit — try again in a moment.");
-      }
-    });
-  }
-
-  // Re-attaches the report/comments/edit/delete listeners on a single card
-  // after its action row gets rebuilt (used when canceling an edit).
-  function rewireCardActions(card){
-    const reportBtn = card.querySelector('[data-report]');
-    if (reportBtn){
-      reportBtn.addEventListener('click', async (e) => {
-        const id = e.target.getAttribute('data-report');
-        await updateDoc(doc(db, 'posts', id), { reported: true });
-      });
-    }
-    const deleteBtn = card.querySelector('[data-delete]');
-    if (deleteBtn){
-      deleteBtn.addEventListener('click', async (e) => {
-        const id = e.target.getAttribute('data-delete');
-        if (!confirm('delete this post? this can\'t be undone.')) return;
-        await deleteDoc(doc(db, 'posts', id));
-      });
-    }
-    const editBtn = card.querySelector('[data-edit]');
-    if (editBtn){
-      editBtn.addEventListener('click', (e) => {
-        const id = e.target.getAttribute('data-edit');
-        enterEditMode(id, card);
-      });
-    }
-    const toggleBtn = card.querySelector('[data-toggle-comments]');
-    if (toggleBtn){
-      toggleBtn.addEventListener('click', () => {
-        const id = toggleBtn.getAttribute('data-toggle-comments');
-        const panel = document.getElementById('comments-' + id);
-        const isOpen = panel.classList.toggle('show');
-        openComments[id] = isOpen;
-        if (isOpen && !commentListeners[id]){
-          listenComments(id);
-        }
-      });
-    }
-    const blockBtn = card.querySelector('[data-block]');
-    if (blockBtn){
-      blockBtn.addEventListener('click', async (e) => {
-        const uidToBlock = e.target.getAttribute('data-block');
-        const name = e.target.getAttribute('data-block-name');
-        if (!confirm(`block ${name}? you won't see their posts anymore. you can undo this from your profile page.`)) return;
-        await updateDoc(doc(db, 'users', currentUid), { blocked: arrayUnion(uidToBlock) });
-        blockedUids.push(uidToBlock);
-        listenFeed();
-      });
-    }
-  }
-
-
   function renderFeed(posts){
     const feedEl = document.getElementById('feed');
     feedEl.innerHTML = '';
@@ -256,7 +142,7 @@
       if (shielded){
         div.className = 'post hidden-post';
         div.innerHTML = `
-          <div class="post-meta"><span class="post-meta-left">${avatarHtml(p)}<span>${escapeHtml(p.author)}</span>${verifiedBadge(p)}${adminBadge(p)}</span><span>${timeAgo(p.createdAt)}</span></div>
+          <div class="post-meta"><span class="post-meta-left">${avatarHtml(p)}<span>${escapeHtml(p.author)}</span>${verifiedBadge(p)}</span><span>${timeAgo(p.createdAt)}</span></div>
           <div class="post-body">this post isn't shown to you.</div>
         `;
         feedEl.appendChild(div);
@@ -273,29 +159,23 @@
       const isOwn = (p.authorUid && p.authorUid === currentUid)
                     || (!p.authorUid && p.author === currentUsername);
       const deleteHtml = isOwn ? `<button data-delete="${p.id}">delete</button>` : '';
-      const editHtml = isOwn ? `<button data-edit="${p.id}">edit</button>` : '';
-      const blockHtml = (!isOwn && p.authorUid) ? `<button data-block="${p.authorUid}" data-block-name="${escapeHtml(p.author||'this user')}">block</button>` : '';
       const imageHtml = p.imageUrl
         ? `<img src="${p.imageUrl}" style="max-width:100%; border-radius:8px; margin-top:10px; display:block;" alt="attached image">`
         : '';
 
       const titleHtml = p.title ? `<div class="post-title">${escapeHtml(p.title)}</div>` : '';
 
-      const editedTag = p.edited ? ` <span style="opacity:0.65;">(edited)</span>` : '';
-
       div.innerHTML = `
-        <div class="post-meta"><span class="post-meta-left">${avatarHtml(p)}<span>${escapeHtml(p.author)}</span>${verifiedBadge(p)}${adminBadge(p)}</span><span>${timeAgo(p.createdAt)}${editedTag}</span></div>
-        <div class="post-title-wrap" data-title-wrap="${p.id}">${titleHtml}</div>
-        <div class="post-body" data-body="${p.id}">${escapeHtml(p.text)}</div>
+        <div class="post-meta"><span class="post-meta-left">${avatarHtml(p)}<span>${escapeHtml(p.author)}</span>${verifiedBadge(p)}</span><span>${timeAgo(p.createdAt)}</span></div>
+        ${titleHtml}
+        <div class="post-body">${escapeHtml(p.text)}</div>
         ${imageHtml}
         ${replyHtml}
         ${reportedHtml}
-        <div class="post-actions" data-actions="${p.id}">
+        <div class="post-actions">
           <button data-report="${p.id}">report</button>
           <button data-toggle-comments="${p.id}">comments</button>
-          ${editHtml}
           ${deleteHtml}
-          ${blockHtml}
         </div>
         <div class="comments-panel" id="comments-${p.id}">
           <div class="comment-list" id="comment-list-${p.id}"></div>
@@ -305,8 +185,6 @@
           </div>
         </div>
       `;
-      div.dataset.rawText = p.text || '';
-      div.dataset.rawTitle = p.title || '';
       feedEl.appendChild(div);
     });
 
@@ -317,30 +195,11 @@
       });
     });
 
-    feedEl.querySelectorAll('[data-block]').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const uidToBlock = e.target.getAttribute('data-block');
-        const name = e.target.getAttribute('data-block-name');
-        if (!confirm(`block ${name}? you won't see their posts anymore. you can undo this from your profile page.`)) return;
-        await updateDoc(doc(db, 'users', currentUid), { blocked: arrayUnion(uidToBlock) });
-        blockedUids.push(uidToBlock);
-        listenFeed();
-      });
-    });
-
     feedEl.querySelectorAll('[data-delete]').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const id = e.target.getAttribute('data-delete');
         if (!confirm('delete this post? this can\'t be undone.')) return;
         await deleteDoc(doc(db, 'posts', id));
-      });
-    });
-
-    feedEl.querySelectorAll('[data-edit]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const id = e.target.getAttribute('data-edit');
-        const card = e.target.closest('.post');
-        enterEditMode(id, card);
       });
     });
 
