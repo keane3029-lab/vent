@@ -38,3 +38,6 @@ This project uses [Firebase](https://firebase.google.com/) for authentication an
 ## Status
 
 Solo project, currently just an idea/prototype. Open to becoming open-source down the line — forks and bug fixes would be reviewed before merging.
+
+## Support
+our email is ventappteam@gmail.com!
