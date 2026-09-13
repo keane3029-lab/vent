@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vent. — chat</title>
+<link rel="stylesheet" href="style.css">
+<script>try{if(localStorage.getItem('vent_theme')==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}</script>
+</head>
+<body>
+<div class="wrap">
+  <div class="nav" id="nav"></div>
+
+  <div class="card">
+    <div class="chat-header">
+      <div class="chat-header-title" id="chatTitle">loading...</div>
+      <div class="chat-header-actions" id="chatActions"></div>
+    </div>
+    <div id="endedBanner" class="empty-state" style="display:none; padding:10px;"></div>
+    <div class="chat-messages" id="messagesEl"></div>
+    <div class="chat-composer" id="composerWrap">
+      <input type="text" id="messageInput" placeholder="type a message..." maxlength="500">
+      <button id="sendBtn">send</button>
+    </div>
+    <div id="blockedNotice" class="empty-state" style="display:none; padding:10px;"></div>
+  </div>
+  <button class="btn-link" onclick="window.location.href='chats.html'">← back to chats</button>
+</div>
+
+<div class="modal-backdrop" id="supportModal">
+  <div class="modal">
+    <h3>we saw that, and we're glad you shared it</h3>
+    <p>your message went through — nothing about this gets flagged or hidden. if things feel heavy right now, you don't have to carry it alone.</p>
+    <div class="resource">
+      <b>988 Suicide & Crisis Lifeline (US)</b>
+      call or text 988, available 24/7
+    </div>
+    <div class="resource">
+      <b>Crisis Text Line</b>
+      text HOME to 741741
+    </div>
+    <button id="closeSupportModal">okay</button>
+  </div>
+</div>
+
+<script src="vent.js"></script>
+<script type="module">
+  import {
+    auth, db, onAuthStateChanged, signOut,
+    doc, getDoc, updateDoc, setDoc, collection, addDoc, query, orderBy,
+    onSnapshot, arrayUnion, arrayRemove, serverTimestamp
+  } from './firebase.js';
+
+  const params = new URLSearchParams(window.location.search);
+  const chatId = params.get('id');
+  if (!chatId){ window.location.href = 'chats.html'; }
+
+  let currentUser = null;
+  let chatData = null;
+  let otherUid = null;
+  let otherName = null;
+  let iBlockedThem = false;
+  let theyBlockedMe = false;
+  let messagesUnsub = null;
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user){
+      window.location.href = 'login.html';
+      return;
+    }
+    currentUser = user;
+    const username = user.displayName || user.email;
+    document.getElementById('nav').innerHTML = buildNavHtml(username, user.uid);
+    const signOutBtn = document.getElementById('navSignOut');
+    if (signOutBtn){
+      signOutBtn.addEventListener('click', async () => {
+        await signOut(auth);
+        window.location.href = 'index.html';
+      });
+    }
+    await loadChat();
+  });
+
+  async function loadChat(){
+    const chatSnap = await getDoc(doc(db, 'chats', chatId));
+    if (!chatSnap.exists()){
+      document.getElementById('chatTitle').textContent = 'chat not found';
+      document.getElementById('composerWrap').style.display = 'none';
+      return;
+    }
+    chatData = chatSnap.data();
+
+    if (chatData.type === 'dm'){
+      otherUid = (chatData.participants || []).find(p => p !== currentUser.uid);
+      const otherSnap = await getDoc(doc(db, 'users', otherUid));
+      otherName = otherSnap.exists() ? (otherSnap.data().username || 'unknown') : 'unknown';
+      document.getElementById('chatTitle').textContent = otherName;
+
+      const meSnap = await getDoc(doc(db, 'users', currentUser.uid));
+      const myBlocked = (meSnap.exists() && Array.isArray(meSnap.data().blocked)) ? meSnap.data().blocked : [];
+      iBlockedThem = myBlocked.includes(otherUid);
+      const theirBlocked = (otherSnap.exists() && Array.isArray(otherSnap.data().blocked)) ? otherSnap.data().blocked : [];
+      theyBlockedMe = theirBlocked.includes(currentUser.uid);
+
+      document.getElementById('chatActions').innerHTML = iBlockedThem
+        ? `<button id="unblockBtn">unblock</button>`
+        : `<button id="blockBtn">block</button>`;
+
+      const blockBtn = document.getElementById('blockBtn');
+      if (blockBtn) blockBtn.addEventListener('click', async () => {
+        if (!confirm(`block ${otherName}? you won't be able to message each other.`)) return;
+        await updateDoc(doc(db, 'users', currentUser.uid), { blocked: arrayUnion(otherUid) });
+        iBlockedThem = true;
+        applyBlockState();
+      });
+      const unblockImportBtn = document.getElementById('unblockBtn');
+      if (unblockImportBtn) unblockImportBtn.addEventListener('click', async () => {
+        await updateDoc(doc(db, 'users', currentUser.uid), { blocked: arrayRemove(otherUid) });
+        iBlockedThem = false;
+        applyBlockState();
+      });
+      applyBlockState();
+
+    } else if (chatData.type === 'anonymous'){
+      document.getElementById('chatTitle').textContent = 'stranger';
+      document.getElementById('chatActions').innerHTML = `<button id="leaveBtn">leave chat</button>`;
+      document.getElementById('leaveBtn').addEventListener('click', async () => {
+        await updateDoc(doc(db, 'chats', chatId), { ended: true, endedBy: currentUser.uid });
+        window.location.href = 'chats.html';
+      });
+      if (chatData.ended){
+        showEndedBanner();
+      }
+    } else {
+      document.getElementById('chatTitle').textContent = 'public lounge';
+    }
+
+    listenForMessages();
+  }
+
+  function applyBlockState(){
+    const notice = document.getElementById('blockedNotice');
+    const composer = document.getElementById('composerWrap');
+    if (iBlockedThem){
+      notice.style.display = '';
+      notice.textContent = `you've blocked ${otherName}. unblock them to keep messaging.`;
+      composer.style.display = 'none';
+    } else if (theyBlockedMe){
+      notice.style.display = '';
+      notice.textContent = 'you can\'t message this person right now.';
+      composer.style.display = 'none';
+    } else {
+      notice.style.display = 'none';
+      composer.style.display = '';
+    }
+  }
+
+  function showEndedBanner(){
+    const banner = document.getElementById('endedBanner');
+    banner.style.display = '';
+    banner.textContent = 'the stranger left this chat.';
+    document.getElementById('composerWrap').style.display = 'none';
+  }
+
+  function listenForMessages(){
+    const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('createdAt', 'asc'));
+    messagesUnsub = onSnapshot(q, (snap) => {
+      const el = document.getElementById('messagesEl');
+      el.innerHTML = '';
+      if (snap.empty){
+        el.innerHTML = '<p class="empty-state">no messages yet — say hi.</p>';
+      }
+      snap.forEach(msgDoc => {
+        const m = msgDoc.data();
+        const mine = m.senderUid === currentUser.uid;
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble ' + (mine ? 'chat-bubble-mine' : 'chat-bubble-theirs');
+        const reportBtn = (!mine && !m.reported) ? `<button data-report="${msgDoc.id}">report</button>` : (!mine && m.reported ? `<span>reported</span>` : '');
+        bubble.innerHTML = `${escapeHtml(m.text || '')}<div class="chat-bubble-meta">${timeAgo(m.createdAt)}${reportBtn}</div>`;
+        const rbtn = bubble.querySelector('[data-report]');
+        if (rbtn) rbtn.addEventListener('click', async () => {
+          await updateDoc(doc(db, 'chats', chatId, 'messages', msgDoc.id), { reported: true });
+        });
+        el.appendChild(bubble);
+      });
+      el.scrollTop = el.scrollHeight;
+
+      // if anonymous chat and the other side just ended it, reflect live
+      if (chatData && chatData.type === 'anonymous'){
+        getDoc(doc(db, 'chats', chatId)).then(freshSnap => {
+          if (freshSnap.exists() && freshSnap.data().ended && !document.getElementById('endedBanner').style.display){
+            chatData = freshSnap.data();
+            showEndedBanner();
+          }
+        });
+      }
+    });
+  }
+
+  async function sendMessage(){
+    const input = document.getElementById('messageInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    if (containsAny(text, explicitWords)){
+      alert("this can't be sent — vent. doesn't allow explicit (18+) content.");
+      return;
+    }
+
+    const isBullying = containsAny(text, bullyWords);
+    const isSelfHarm = containsAny(text, selfHarmWords);
+    const senderName = chatData.type === 'anonymous' ? 'stranger' : (currentUser.displayName || currentUser.email);
+
+    input.value = '';
+    try {
+      await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        text,
+        senderUid: currentUser.uid,
+        senderName,
+        createdAt: serverTimestamp(),
+        flaggedBullying: isBullying,
+        isSelfHarm: isSelfHarm,
+        reported: false
+      });
+      await updateDoc(doc(db, 'chats', chatId), {
+        lastMessageAt: serverTimestamp(),
+        lastMessageText: text.slice(0, 80)
+      });
+    } catch (err){
+      input.value = text;
+      alert("that didn't send — try again in a moment.");
+      return;
+    }
+
+    if (isSelfHarm){
+      document.getElementById('supportModal').classList.add('show');
+    }
+  }
+
+  document.getElementById('sendBtn').addEventListener('click', sendMessage);
+  document.getElementById('messageInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendMessage();
+  });
+  document.getElementById('closeSupportModal').addEventListener('click', () => {
+    document.getElementById('supportModal').classList.remove('show');
+  });
+
+  window.addEventListener('beforeunload', () => {
+    if (messagesUnsub) messagesUnsub();
+  });
+</script>
+</body>
+</html>

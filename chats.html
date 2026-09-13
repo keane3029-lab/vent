@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vent. — chats</title>
+<link rel="stylesheet" href="style.css">
+<script>try{if(localStorage.getItem('vent_theme')==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}</script>
+</head>
+<body>
+<div class="wrap">
+  <div class="nav" id="nav"></div>
+
+  <div class="chat-tabs">
+    <button id="tabFriends" class="active">friends</button>
+    <button id="tabAnon">anonymous</button>
+    <button id="tabLounge">public lounge</button>
+  </div>
+
+  <div id="paneFriends">
+    <div class="card">
+      <div id="friendsChatList"><p class="empty-state">loading...</p></div>
+    </div>
+  </div>
+
+  <div id="paneAnon" style="display:none;">
+    <div class="card">
+      <div id="anonIdle">
+        <p style="color:var(--muted); font-size:0.9rem; line-height:1.5; margin:0 0 14px;">
+          talk to a random stranger, no names attached. either of you can leave anytime.
+        </p>
+        <button class="btn-primary" id="findStrangerBtn" style="margin-top:0;">find a stranger</button>
+      </div>
+      <div id="anonWaiting" class="chat-waiting" style="display:none;">
+        <div class="spinner"></div>
+        looking for someone to talk to...
+        <div style="margin-top:14px;"><button class="btn-link" id="cancelWaitBtn">cancel</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="paneLounge" style="display:none;">
+    <div class="card" style="text-align:center;">
+      <p style="color:var(--muted); font-size:0.9rem; line-height:1.5; margin:0 0 14px;">
+        one shared room, open to everyone logged in. be nice.
+      </p>
+      <button class="btn-primary" id="openLoungeBtn" style="margin-top:0;">open the lounge</button>
+    </div>
+  </div>
+</div>
+
+<script src="vent.js"></script>
+<script type="module">
+  import {
+    auth, db, onAuthStateChanged, signOut,
+    collection, doc, setDoc, getDoc, query, where, getDocs,
+    onSnapshot, deleteDoc, runTransaction, serverTimestamp, orderBy, limit
+  } from './firebase.js';
+
+  let currentUser = null;
+  let waitUnsub = null;
+
+  onAuthStateChanged(auth, (user) => {
+    if (!user){
+      window.location.href = 'login.html';
+      return;
+    }
+    currentUser = user;
+    const username = user.displayName || user.email;
+    document.getElementById('nav').innerHTML = buildNavHtml(username, user.uid);
+    const signOutBtn = document.getElementById('navSignOut');
+    if (signOutBtn){
+      signOutBtn.addEventListener('click', async () => {
+        await signOut(auth);
+        window.location.href = 'index.html';
+      });
+    }
+    loadFriendChats();
+    resumeWaitingIfAny();
+  });
+
+  // --- tabs ---
+  function showTab(name){
+    document.getElementById('tabFriends').classList.toggle('active', name === 'friends');
+    document.getElementById('tabAnon').classList.toggle('active', name === 'anon');
+    document.getElementById('tabLounge').classList.toggle('active', name === 'lounge');
+    document.getElementById('paneFriends').style.display = name === 'friends' ? '' : 'none';
+    document.getElementById('paneAnon').style.display = name === 'anon' ? '' : 'none';
+    document.getElementById('paneLounge').style.display = name === 'lounge' ? '' : 'none';
+  }
+  document.getElementById('tabFriends').addEventListener('click', () => showTab('friends'));
+  document.getElementById('tabAnon').addEventListener('click', () => showTab('anon'));
+  document.getElementById('tabLounge').addEventListener('click', () => showTab('lounge'));
+
+  // --- friends / DMs ---
+  function dmChatId(uidA, uidB){
+    return 'dm_' + [uidA, uidB].sort().join('_');
+  }
+
+  async function loadFriendChats(){
+    const listEl = document.getElementById('friendsChatList');
+    const asFromQ = query(collection(db, 'friendRequests'), where('from', '==', currentUser.uid), where('status', '==', 'accepted'));
+    const asToQ = query(collection(db, 'friendRequests'), where('to', '==', currentUser.uid), where('status', '==', 'accepted'));
+    const [asFromSnap, asToSnap] = await Promise.all([getDocs(asFromQ), getDocs(asToQ)]);
+    const friendDocs = [...asFromSnap.docs, ...asToSnap.docs];
+
+    if (friendDocs.length === 0){
+      listEl.innerHTML = '<p class="empty-state">no friends yet — add someone from their post in the feed, then message them here.</p>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    for (const reqDoc of friendDocs){
+      const req = reqDoc.data();
+      const isMeFrom = req.from === currentUser.uid;
+      const otherUid = isMeFrom ? req.to : req.from;
+      const otherName = isMeFrom ? req.toName : req.fromName;
+
+      const row = document.createElement('div');
+      row.className = 'chat-list-row';
+      row.innerHTML = `
+        <div class="avatar-mini-placeholder">${escapeHtml((otherName || '?').charAt(0).toUpperCase())}</div>
+        <div><div class="chat-list-name">${escapeHtml(otherName || 'unknown')}</div><div class="chat-list-preview">tap to message</div></div>
+      `;
+      row.addEventListener('click', () => openDm(otherUid, otherName));
+      listEl.appendChild(row);
+    }
+  }
+
+  async function openDm(otherUid, otherName){
+    const chatId = dmChatId(currentUser.uid, otherUid);
+    const chatRef = doc(db, 'chats', chatId);
+    const existing = await getDoc(chatRef);
+    if (!existing.exists()){
+      await setDoc(chatRef, {
+        type: 'dm',
+        participants: [currentUser.uid, otherUid],
+        createdAt: serverTimestamp(),
+        lastMessageAt: serverTimestamp(),
+        lastMessageText: ''
+      });
+    }
+    window.location.href = 'chat-room.html?id=' + encodeURIComponent(chatId);
+  }
+
+  // --- public lounge ---
+  document.getElementById('openLoungeBtn').addEventListener('click', async () => {
+    const chatRef = doc(db, 'chats', 'public-lounge');
+    const existing = await getDoc(chatRef);
+    if (!existing.exists()){
+      await setDoc(chatRef, {
+        type: 'group',
+        participants: [],
+        createdAt: serverTimestamp(),
+        lastMessageAt: serverTimestamp(),
+        lastMessageText: ''
+      });
+    }
+    window.location.href = 'chat-room.html?id=public-lounge';
+  });
+
+  // --- anonymous matching ---
+  function resumeWaitingIfAny(){
+    // if the user left this page mid-wait and came back, resume listening
+    getDoc(doc(db, 'anonymousQueue', currentUser.uid)).then(snap => {
+      if (snap.exists() && !snap.data().matchedChatId){
+        showTab('anon');
+        beginWaiting(false);
+      }
+    });
+  }
+
+  document.getElementById('findStrangerBtn').addEventListener('click', async () => {
+    document.getElementById('anonIdle').style.display = 'none';
+    document.getElementById('anonWaiting').style.display = '';
+
+    // look for someone already waiting
+    const q = query(collection(db, 'anonymousQueue'), orderBy('waitingSince', 'asc'), limit(10));
+    const snap = await getDocs(q);
+    const candidate = snap.docs.find(d => d.id !== currentUser.uid && !d.data().matchedChatId);
+
+    if (candidate){
+      try {
+        const newChatRef = doc(collection(db, 'chats'));
+        const matched = await runTransaction(db, async (tx) => {
+          const candRef = doc(db, 'anonymousQueue', candidate.id);
+          const candSnap = await tx.get(candRef);
+          if (!candSnap.exists() || candSnap.data().matchedChatId) return false;
+          tx.set(newChatRef, {
+            type: 'anonymous',
+            participants: [currentUser.uid, candidate.id],
+            createdAt: serverTimestamp(),
+            lastMessageAt: serverTimestamp(),
+            lastMessageText: '',
+            ended: false
+          });
+          tx.update(candRef, { matchedChatId: newChatRef.id });
+          return true;
+        });
+        if (matched){
+          window.location.href = 'chat-room.html?id=' + encodeURIComponent(newChatRef.id);
+          return;
+        }
+      } catch (err){ /* fall through to waiting below if the transaction lost the race */ }
+    }
+
+    beginWaiting(true);
+  });
+
+  async function beginWaiting(createDoc){
+    if (createDoc){
+      await setDoc(doc(db, 'anonymousQueue', currentUser.uid), {
+        waitingSince: serverTimestamp(),
+        matchedChatId: null
+      });
+    }
+    document.getElementById('anonIdle').style.display = 'none';
+    document.getElementById('anonWaiting').style.display = '';
+    if (waitUnsub) waitUnsub();
+    waitUnsub = onSnapshot(doc(db, 'anonymousQueue', currentUser.uid), (snap) => {
+      if (snap.exists() && snap.data().matchedChatId){
+        const chatId = snap.data().matchedChatId;
+        deleteDoc(doc(db, 'anonymousQueue', currentUser.uid)).catch(() => {});
+        window.location.href = 'chat-room.html?id=' + encodeURIComponent(chatId);
+      }
+    });
+  }
+
+  document.getElementById('cancelWaitBtn').addEventListener('click', async () => {
+    if (waitUnsub) { waitUnsub(); waitUnsub = null; }
+    await deleteDoc(doc(db, 'anonymousQueue', currentUser.uid)).catch(() => {});
+    document.getElementById('anonWaiting').style.display = 'none';
+    document.getElementById('anonIdle').style.display = '';
+  });
+</script>
+</body>
+</html>

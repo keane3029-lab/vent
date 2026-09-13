@@ -83,7 +83,7 @@ function buildNavHtml(username, uid){
   let linksHtml;
   if (username){
     const reviewLink = (uid && MODERATOR_UIDS.includes(uid)) ? ` · <a href="moderation.html">review</a>` : '';
-    linksHtml = `<span>logged in as <b>${escapeHtml(username)}</b></span> · <a href="profile.html">profile</a> · <button id="navSignOut">sign out</button> · <a href="feed.html">feed</a>${reviewLink}`;
+    linksHtml = `<span>logged in as <b>${escapeHtml(username)}</b></span> · <a href="profile.html">profile</a> · <button id="navSignOut">sign out</button> · <a href="feed.html">feed</a> · <a href="chats.html">chats</a>${reviewLink}`;
   } else {
     linksHtml = `<a href="login.html">log in</a> · <a href="signup.html">sign up</a>`;
   }

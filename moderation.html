@@ -15,6 +15,9 @@
   <div id="gate" class="empty-state">checking access...</div>
   <div id="reportsList"></div>
 
+  <div class="feed-heading" style="margin-top:24px;">reported messages</div>
+  <div id="messageReportsList"></div>
+
   <div class="footer-note">
     an idea for a place to vent — not a published product.
   </div>
@@ -24,11 +27,12 @@
 <script type="module">
   import {
     auth, db, onAuthStateChanged, signOut,
-    collection, doc, getDoc, getDocs, query, where, deleteDoc, updateDoc
+    collection, collectionGroup, doc, getDoc, getDocs, query, where, deleteDoc, updateDoc
   } from './firebase.js';
 
   const gate = document.getElementById('gate');
   const reportsList = document.getElementById('reportsList');
+  const messageReportsList = document.getElementById('messageReportsList');
 
   onAuthStateChanged(auth, (user) => {
     if (!user){
@@ -52,6 +56,7 @@
 
     gate.style.display = 'none';
     loadReports();
+    loadMessageReports();
   });
 
   async function loadReports(){
@@ -120,6 +125,78 @@
   function checkEmpty(){
     if (!reportsList.querySelector('.post')){
       reportsList.innerHTML = '<p class="empty-state">no reported posts right now. all clear.</p>';
+    }
+  }
+
+  async function loadMessageReports(){
+    messageReportsList.innerHTML = '<p class="empty-state">loading reports...</p>';
+
+    const q = query(collectionGroup(db, 'messages'), where('reported', '==', true));
+    let snap;
+    try {
+      snap = await getDocs(q);
+    } catch (err){
+      // collection-group queries need a Firestore index the first time they're run —
+      // the console will offer a one-click link to create it if this fails
+      messageReportsList.innerHTML = '<p class="empty-state">couldn\'t load message reports — a Firestore index may still need to be created (check the browser console for a link).</p>';
+      console.error(err);
+      return;
+    }
+
+    if (snap.empty){
+      messageReportsList.innerHTML = '<p class="empty-state">no reported messages right now. all clear.</p>';
+      return;
+    }
+
+    messageReportsList.innerHTML = '';
+
+    for (const msgDoc of snap.docs){
+      const m = msgDoc.data();
+      const chatId = msgDoc.ref.parent.parent.id;
+
+      let senderEmail = 'unknown';
+      if (m.senderUid){
+        try {
+          const senderSnap = await getDoc(doc(db, 'users', m.senderUid));
+          if (senderSnap.exists() && senderSnap.data().email) senderEmail = senderSnap.data().email;
+        } catch(err){ /* leave as unknown */ }
+      }
+
+      const card = document.createElement('div');
+      card.className = 'post';
+      card.innerHTML = `
+        <div class="post-meta"><span>${escapeHtml(m.senderName || 'unknown')}</span><span>${timeAgo(m.createdAt)}</span></div>
+        <div class="post-body">${escapeHtml(m.text || '')}</div>
+        <div class="post-reply">chat: ${escapeHtml(chatId)} · sender email: ${escapeHtml(senderEmail)}</div>
+        <div class="post-actions">
+          <button class="dismiss-btn">dismiss report</button>
+          <button class="delete-btn" data-delete>delete message</button>
+        </div>
+      `;
+
+      card.querySelector('.dismiss-btn').addEventListener('click', async () => {
+        if (confirm('clear this report? the message stays up.')){
+          await updateDoc(msgDoc.ref, { reported: false });
+          card.remove();
+          checkMessagesEmpty();
+        }
+      });
+
+      card.querySelector('.delete-btn').addEventListener('click', async () => {
+        if (confirm('permanently delete this message?')){
+          await deleteDoc(msgDoc.ref);
+          card.remove();
+          checkMessagesEmpty();
+        }
+      });
+
+      messageReportsList.appendChild(card);
+    }
+  }
+
+  function checkMessagesEmpty(){
+    if (!messageReportsList.querySelector('.post')){
+      messageReportsList.innerHTML = '<p class="empty-state">no reported messages right now. all clear.</p>';
     }
   }
 </script>

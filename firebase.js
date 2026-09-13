@@ -13,6 +13,7 @@ import {
 import {
   getFirestore,
   collection,
+  collectionGroup,
   doc,
   setDoc,
   getDoc,
@@ -21,9 +22,11 @@ import {
   query,
   where,
   orderBy,
+  limit,
   onSnapshot,
   updateDoc,
   deleteDoc,
+  runTransaction,
   arrayUnion,
   arrayRemove,
   serverTimestamp
@@ -45,5 +48,5 @@ const db = getFirestore(app);
 export {
   app, auth, db,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile,
-  collection, doc, setDoc, getDoc, getDocs, addDoc, query, where, orderBy, onSnapshot, updateDoc, deleteDoc, arrayUnion, arrayRemove, serverTimestamp
+  collection, collectionGroup, doc, setDoc, getDoc, getDocs, addDoc, query, where, orderBy, limit, onSnapshot, updateDoc, deleteDoc, runTransaction, arrayUnion, arrayRemove, serverTimestamp
 };
