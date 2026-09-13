@@ -51,7 +51,7 @@
 <script type="module">
   import {
     auth, db, onAuthStateChanged, signOut,
-    collection, addDoc, doc, getDoc, getDocs, query, orderBy, onSnapshot, updateDoc, deleteDoc, arrayUnion
+    collection, addDoc, doc, getDoc, getDocs, query, where, orderBy, onSnapshot, updateDoc, deleteDoc, arrayUnion
   } from './firebase.js';
 
   const avatarCache = {}; // uid -> dataUrl | null (null = fetched but no pic)
@@ -124,6 +124,41 @@
     return (p.authorUid && VERIFIED_UIDS.includes(p.authorUid))
       ? `<svg class="verified-badge" viewBox="0 0 20 20" width="14" height="14"><circle cx="10" cy="10" r="10" fill="#8aa399"/><path d="M6 10.5l2.5 2.5L14 7.5" stroke="#1b2430" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`
       : '';
+  }
+
+  async function sendFriendRequest(targetUid, targetName, btn){
+    if (targetUid === currentUid) return;
+
+    // check both directions for an existing request/friendship before creating a new one
+    const sentQ = query(collection(db, 'friendRequests'), where('from', '==', currentUid), where('to', '==', targetUid));
+    const receivedQ = query(collection(db, 'friendRequests'), where('from', '==', targetUid), where('to', '==', currentUid));
+    const [sentSnap, receivedSnap] = await Promise.all([getDocs(sentQ), getDocs(receivedQ)]);
+
+    if (!sentSnap.empty){
+      const status = sentSnap.docs[0].data().status;
+      alert(status === 'accepted' ? `you and ${targetName} are already friends.` : `you already sent ${targetName} a friend request.`);
+      return;
+    }
+    if (!receivedSnap.empty){
+      const status = receivedSnap.docs[0].data().status;
+      alert(status === 'accepted' ? `you and ${targetName} are already friends.` : `${targetName} already sent you a request — check your profile page to accept it.`);
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, 'friendRequests'), {
+        from: currentUid,
+        fromName: currentUsername,
+        to: targetUid,
+        toName: targetName,
+        status: 'pending',
+        createdAt: Date.now()
+      });
+      btn.textContent = 'request sent';
+      btn.disabled = true;
+    } catch(err){
+      alert("couldn't send that request — try again in a moment.");
+    }
   }
 
   function avatarHtml(p){
@@ -238,6 +273,14 @@
         listenFeed();
       });
     }
+    const friendBtn = card.querySelector('[data-add-friend]');
+    if (friendBtn){
+      friendBtn.addEventListener('click', (e) => {
+        const uid = e.target.getAttribute('data-add-friend');
+        const name = e.target.getAttribute('data-friend-name');
+        sendFriendRequest(uid, name, e.target);
+      });
+    }
   }
 
 
@@ -276,6 +319,7 @@
       const deleteHtml = isOwn ? `<button data-delete="${p.id}">delete</button>` : '';
       const editHtml = isOwn ? `<button data-edit="${p.id}">edit</button>` : '';
       const blockHtml = (!isOwn && p.authorUid) ? `<button data-block="${p.authorUid}" data-block-name="${escapeHtml(p.author||'this user')}">block</button>` : '';
+      const friendHtml = (!isOwn && p.authorUid) ? `<button data-add-friend="${p.authorUid}" data-friend-name="${escapeHtml(p.author||'this user')}">add friend</button>` : '';
       const imageHtml = p.imageUrl
         ? `<img src="${p.imageUrl}" style="max-width:100%; border-radius:8px; margin-top:10px; display:block;" alt="attached image">`
         : '';
@@ -296,6 +340,7 @@
           <button data-toggle-comments="${p.id}">comments</button>
           ${editHtml}
           ${deleteHtml}
+          ${friendHtml}
           ${blockHtml}
         </div>
         <div class="comments-panel" id="comments-${p.id}">
@@ -326,6 +371,14 @@
         await updateDoc(doc(db, 'users', currentUid), { blocked: arrayUnion(uidToBlock) });
         blockedUids.push(uidToBlock);
         listenFeed();
+      });
+    });
+
+    feedEl.querySelectorAll('[data-add-friend]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const uid = e.target.getAttribute('data-add-friend');
+        const name = e.target.getAttribute('data-friend-name');
+        sendFriendRequest(uid, name, e.target);
       });
     });
 

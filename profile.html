@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>vent. — profile</title>
 <link rel="stylesheet" href="style.css">
+<script>try{if(localStorage.getItem('vent_theme')==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}</script>
 <style>
   .avatar-large{
     width: 96px; height: 96px;
@@ -42,13 +43,29 @@
     <button class="btn-primary" id="chooseAvatarBtn" type="button">choose a profile picture</button>
     <div class="msg" id="profileMsg"></div>
   </div>
+
+  <div class="card">
+    <div class="feed-heading" style="margin-bottom:10px;">friend requests</div>
+    <div id="friendRequestsList"><p class="empty-state">loading...</p></div>
+  </div>
+
+  <div class="card">
+    <div class="feed-heading" style="margin-bottom:10px;">friends</div>
+    <div id="friendsList"><p class="empty-state">loading...</p></div>
+  </div>
+
+  <div class="card">
+    <div class="feed-heading" style="margin-bottom:10px;">blocked users</div>
+    <div id="blockedList"><p class="empty-state">loading...</p></div>
+  </div>
 </div>
 
 <script src="vent.js"></script>
 <script type="module">
   import {
     auth, db, onAuthStateChanged, signOut,
-    doc, setDoc, getDoc
+    doc, setDoc, getDoc, updateDoc, arrayRemove,
+    collection, query, where, getDocs, deleteDoc
   } from './firebase.js';
 
   let currentUser = null;
@@ -75,7 +92,107 @@
     const userDoc = await getDoc(doc(db, 'users', user.uid));
     const photoData = userDoc.exists() ? userDoc.data().photoData : null;
     renderAvatar(photoData);
+
+    const blocked = (userDoc.exists() && Array.isArray(userDoc.data().blocked)) ? userDoc.data().blocked : [];
+    renderBlockedList(blocked);
+
+    loadFriendData();
   });
+
+  async function loadFriendData(){
+    // incoming requests: someone sent a request TO me, still pending
+    const incomingQ = query(collection(db, 'friendRequests'), where('to', '==', currentUser.uid), where('status', '==', 'pending'));
+    // accepted friendships in either direction
+    const asFromQ = query(collection(db, 'friendRequests'), where('from', '==', currentUser.uid), where('status', '==', 'accepted'));
+    const asToQ = query(collection(db, 'friendRequests'), where('to', '==', currentUser.uid), where('status', '==', 'accepted'));
+
+    const [incomingSnap, asFromSnap, asToSnap] = await Promise.all([
+      getDocs(incomingQ), getDocs(asFromQ), getDocs(asToQ)
+    ]);
+
+    renderFriendRequests(incomingSnap.docs);
+    renderFriendsList([...asFromSnap.docs, ...asToSnap.docs]);
+  }
+
+  function renderFriendRequests(docs){
+    const listEl = document.getElementById('friendRequestsList');
+    if (docs.length === 0){
+      listEl.innerHTML = '<p class="empty-state">no pending requests.</p>';
+      return;
+    }
+    listEl.innerHTML = '';
+    docs.forEach(reqDoc => {
+      const req = reqDoc.data();
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); gap:8px;';
+      row.innerHTML = `
+        <span>${escapeHtml(req.fromName || 'someone')}</span>
+        <span style="display:flex; gap:10px;">
+          <button data-accept style="background:none; color:var(--sage); padding:0; font-size:0.85rem;">accept</button>
+          <button data-decline style="background:none; color:var(--coral); padding:0; font-size:0.85rem;">decline</button>
+        </span>
+      `;
+      row.querySelector('[data-accept]').addEventListener('click', async () => {
+        await updateDoc(doc(db, 'friendRequests', reqDoc.id), { status: 'accepted' });
+        loadFriendData();
+      });
+      row.querySelector('[data-decline]').addEventListener('click', async () => {
+        await deleteDoc(doc(db, 'friendRequests', reqDoc.id));
+        loadFriendData();
+      });
+      listEl.appendChild(row);
+    });
+  }
+
+  function renderFriendsList(docs){
+    const listEl = document.getElementById('friendsList');
+    if (docs.length === 0){
+      listEl.innerHTML = '<p class="empty-state">no friends yet — add someone from their post in the feed.</p>';
+      return;
+    }
+    listEl.innerHTML = '';
+    docs.forEach(reqDoc => {
+      const req = reqDoc.data();
+      const isMeFrom = req.from === currentUser.uid;
+      const otherName = isMeFrom ? req.toName : req.fromName;
+
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--line);';
+      row.innerHTML = `<span>${escapeHtml(otherName || 'unknown')}</span><button data-unfriend style="background:none; color:var(--coral); padding:0; font-size:0.85rem;">remove</button>`;
+      row.querySelector('[data-unfriend]').addEventListener('click', async () => {
+        if (!confirm(`remove ${otherName} from your friends?`)) return;
+        await deleteDoc(doc(db, 'friendRequests', reqDoc.id));
+        loadFriendData();
+      });
+      listEl.appendChild(row);
+    });
+  }
+
+  async function renderBlockedList(blockedUids){
+    const listEl = document.getElementById('blockedList');
+    if (blockedUids.length === 0){
+      listEl.innerHTML = '<p class="empty-state">you haven\'t blocked anyone.</p>';
+      return;
+    }
+    listEl.innerHTML = '';
+    for (const uid of blockedUids){
+      let name = 'unknown user';
+      try {
+        const snap = await getDoc(doc(db, 'users', uid));
+        if (snap.exists() && snap.data().username) name = snap.data().username;
+      } catch(err){ /* keep 'unknown user' */ }
+
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--line);';
+      row.innerHTML = `<span>${escapeHtml(name)}</span><button data-unblock="${uid}" style="background:none; color:var(--coral); padding:0; font-size:0.85rem;">unblock</button>`;
+      row.querySelector('[data-unblock]').addEventListener('click', async () => {
+        await updateDoc(doc(db, 'users', currentUser.uid), { blocked: arrayRemove(uid) });
+        row.remove();
+        if (!listEl.querySelector('div')) listEl.innerHTML = '<p class="empty-state">you haven\'t blocked anyone.</p>';
+      });
+      listEl.appendChild(row);
+    }
+  }
 
   function renderAvatar(dataUrl){
     const wrap = document.getElementById('avatarWrap');
