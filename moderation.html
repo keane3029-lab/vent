@@ -91,8 +91,10 @@
 
       const titleHtml = post.title ? `<div class="post-title">${escapeHtml(post.title)}</div>` : '';
 
+      const anonTag = post.isAnon ? ` <span class="anon-badge">anon</span>` : '';
+
       card.innerHTML = `
-        <div class="post-meta"><span>${escapeHtml(post.author || 'unknown')}</span><span>${timeAgo(post.createdAt)}</span></div>
+        <div class="post-meta"><span>${escapeHtml(post.author || 'unknown')}${anonTag}</span><span>${timeAgo(post.createdAt)}</span></div>
         ${titleHtml}
         <div class="post-body">${escapeHtml(post.text || '')}</div>
         <div class="post-reply">author email: ${escapeHtml(authorEmail)}</div>

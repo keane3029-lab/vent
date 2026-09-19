@@ -21,6 +21,11 @@
     <div style="margin-top:10px;">
       <button type="button" id="attachImageBtn" style="background:none; color:var(--sage); padding:0; font-size:0.85rem;">📷 attach a photo</button>
     </div>
+    <label style="display:flex; align-items:center; gap:8px; margin-top:14px; font-size:0.85rem; color:var(--muted);">
+      <input type="checkbox" id="postAsAnon" style="width:auto;">
+      post as anon — your name and photo won't show
+    </label>
+    <div id="anonPreview" style="display:none; margin-top:4px; font-size:0.8rem; color:var(--sage);"></div>
     <div class="msg" id="composerNote"></div>
     <button class="btn-primary" id="postBtn">post</button>
     <button class="btn-link" onclick="window.location.href='feed.html'">cancel</button>
@@ -106,6 +111,16 @@
     }
   });
 
+  document.getElementById('postAsAnon').addEventListener('change', (e) => {
+    const preview = document.getElementById('anonPreview');
+    if (e.target.checked && currentUid){
+      preview.textContent = `posting as: ${generateAnonName(currentUid)}`;
+      preview.style.display = 'block';
+    } else {
+      preview.style.display = 'none';
+    }
+  });
+
   document.getElementById('removeImageBtn').addEventListener('click', () => {
     selectedImageDataUrl = null;
     document.getElementById('postImageInput').value = '';
@@ -140,10 +155,13 @@
     const target = findTargetedUsername(text, usernames, currentUsername) || (title ? findTargetedUsername(title, usernames, currentUsername) : null);
     const isSelfHarm = containsAny(text, selfHarmWords) || (title && containsAny(title, selfHarmWords));
 
+    const isAnon = document.getElementById('postAsAnon').checked;
+
     try {
       await addDoc(collection(db, 'posts'), {
-        author: currentUsername,
+        author: isAnon ? generateAnonName(currentUid) : currentUsername,
         authorUid: currentUid,
+        isAnon: isAnon,
         title: title || null,
         text: text,
         imageUrl: selectedImageDataUrl,

@@ -24,6 +24,20 @@ function timeAgo(ts){
   return Math.floor(s/3600) + 'h ago';
 }
 
+// --- anon identity ---
+// Generates a stable "ghost" display name from a uid, so the same user
+// always looks the same when posting anon, without ever exposing who they are.
+const ANON_ADJECTIVES = ['Quiet','Lonely','Hidden','Drifting','Silent','Wandering','Restless','Faded'];
+const ANON_NOUNS = ['Fox','Moth','Raven','Echo','Ghost','Willow','Owl','Crow'];
+
+function generateAnonName(uid){
+  const hash = (uid || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const adj = ANON_ADJECTIVES[hash % ANON_ADJECTIVES.length];
+  const noun = ANON_NOUNS[(hash * 7) % ANON_NOUNS.length];
+  const num = (hash % 9000) + 1000;
+  return `${adj} ${noun} #${num}`;
+}
+
 function findTargetedUsername(text, usernames, exclude){
   const lower = text.toLowerCase();
   for (const uname of usernames){
