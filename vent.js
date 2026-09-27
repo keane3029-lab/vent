@@ -99,8 +99,7 @@ function buildNavHtml(username, uid){
     const reviewLink = (uid && MODERATOR_UIDS.includes(uid)) ? ` · <a href="moderation.html">review</a>` : '';
     linksHtml = `<span>logged in as <b>${escapeHtml(username)}</b></span> · <a href="profile.html">profile</a> · <button id="navSignOut">sign out</button> · <a href="feed.html">feed</a> · <a href="chats.html">chats</a>${reviewLink}`;
   } else {
-    linksHtml = `<a href="login.html">log in</a> · <a href="signup.html">sign up</a>`;
-  }
+   linksHtml = `<span>logged in as <b>${escapeHtml(username)}</b></span> · <a href="profile.html">profile</a> · <button id="navSignOut">sign out</button> · <a href="feed.html">feed</a> · <a href="drafts.html">drafts</a> · <a href="chats.html">chats</a>${reviewLink}`;
   const themeIcon = getTheme() === 'light' ? '🌙' : '☀️';
   return `
     <a class="logo" href="index.html">vent<span>.</span></a>
