@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vent. — drafts</title>
+<link rel="stylesheet" href="style.css">
+<script>try{if(localStorage.getItem('vent_theme')==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}</script>
+</head>
+<body>
+
+<div class="wrap">
+<div class="nav" id="nav"></div>
+
+<div class="feed-heading">your drafts</div>
+<div id="draftsList"></div>
+
+<div class="footer-note">
+drafts are only visible to you — nobody else can see them.
+</div>
+</div>
+
+<script src="vent.js"></script>
+<script type="module">
+import {
+  auth, db, onAuthStateChanged, signOut,
+  collection, addDoc, doc, getDocs, query, orderBy, onSnapshot, deleteDoc
+} from './firebase.js';
+
+let currentUsername = null;
+let currentUid = null;
+let unsubscribeDrafts = null;
+
+onAuthStateChanged(auth, (user) => {
+  if (!user){
+    window.location.href = 'login.html';
+    return;
+  }
+  currentUsername = user.displayName || user.email;
+  currentUid = user.uid;
+  document.getElementById('nav').innerHTML = buildNavHtml(currentUsername, currentUid);
+
+  const signOutBtn = document.getElementById('navSignOut');
+  if (signOutBtn){
+    signOutBtn.addEventListener('click', async () => {
+      await signOut(auth);
+      window.location.href = 'index.html';
+    });
+  }
+
+  listenDrafts();
+});
+
+function listenDrafts(){
+  const q = query(collection(db, 'users', currentUid, 'drafts'), orderBy('updatedAt', 'desc'));
+  unsubscribeDrafts = onSnapshot(q, (snap) => {
+    const drafts = [];
+    snap.forEach(d => drafts.push({ id: d.id, ...d.data() }));
+    renderDrafts(drafts);
+  });
+}
+
+function renderDrafts(drafts){
+  const listEl = document.getElementById('draftsList');
+  listEl.innerHTML = '';
+
+  if (drafts.length === 0){
+    listEl.innerHTML = '<div class="empty-state">no drafts yet. start one from the composer and save it instead of posting.</div>';
+    return;
+  }
+
+  drafts.forEach(d => {
+    const div = document.createElement('div');
+    div.className = 'post';
+
+    const title = d.title ? escapeHtml(d.title) : 'untitled';
+    const snippet = (d.text || '').slice(0, 100) + ((d.text || '').length > 100 ? '...' : '');
+
+    div.innerHTML = `
+      <div class="post-meta"><span class="post-meta-left"><span>${title}</span></span><span>saved ${timeAgo(d.updatedAt)}</span></div>
+      <div class="post-body">${escapeHtml(snippet)}</div>
+      <div class="post-actions">
+        <button class="btn-primary" style="margin-top:0;" data-publish="${d.id}">publish</button>
+        <button data-edit-draft="${d.id}">edit</button>
+        <button data-delete-draft="${d.id}" style="color:var(--coral);">delete</button>
+      </div>
+    `;
+
+    div.querySelector('[data-edit-draft]').addEventListener('click', () => {
+      window.location.href = `post.html?draft=${d.id}`;
+    });
+
+    div.querySelector('[data-delete-draft]').addEventListener('click', async () => {
+      if (!confirm("delete this draft? this can't be undone.")) return;
+      await deleteDoc(doc(db, 'users', currentUid, 'drafts', d.id));
+    });
+
+    div.querySelector('[data-publish]').addEventListener('click', async (e) => {
+      const btn = e.target;
+      btn.disabled = true;
+      btn.textContent = 'posting...';
+      try {
+        if (containsAny(d.text || '', explicitWords) || (d.title && containsAny(d.title, explicitWords))){
+          alert("this can't be posted — vent. doesn't allow explicit (18+) content. edit it first.");
+          btn.disabled = false;
+          btn.textContent = 'publish';
+          return;
+        }
+
+        const usernamesSnap = await getDocs(collection(db, 'usernames'));
+        const usernames = [];
+        usernamesSnap.forEach(u => usernames.push(u.id));
+
+        const isBullying = containsAny(d.text || '', bullyWords) || (d.title && containsAny(d.title, bullyWords));
+        const target = findTargetedUsername(d.text || '', usernames, currentUsername) || (d.title ? findTargetedUsername(d.title, usernames, currentUsername) : null);
+        const isSelfHarm = containsAny(d.text || '', selfHarmWords) || (d.title && containsAny(d.title, selfHarmWords));
+        const isAnon = !!d.isAnon;
+
+        await addDoc(collection(db, 'posts'), {
+          author: isAnon ? generateAnonName(currentUid) : currentUsername,
+          authorUid: currentUid,
+          isAnon: isAnon,
+          title: d.title || null,
+          text: d.text || '',
+          imageUrl: d.imageUrl || null,
+          createdAt: Date.now(),
+          flaggedBullying: isBullying,
+          targetsUsername: target,
+          reported: false
+        });
+
+        await deleteDoc(doc(db, 'users', currentUid, 'drafts', d.id));
+        window.location.href = 'feed.html';
+      } catch (err){
+        alert("couldn't publish this draft — try again in a moment.");
+        btn.disabled = false;
+        btn.textContent = 'publish';
+      }
+    });
+
+    document.getElementById('draftsList').appendChild(div);
+  });
+}
+</script>
+
+</body>
+</html>
