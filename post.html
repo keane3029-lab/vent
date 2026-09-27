@@ -28,6 +28,7 @@
     <div id="anonPreview" style="display:none; margin-top:4px; font-size:0.8rem; color:var(--sage);"></div>
     <div class="msg" id="composerNote"></div>
     <button class="btn-primary" id="postBtn">post</button>
+    <button class="btn-link" id="saveDraftBtn">save draft</button>
     <button class="btn-link" onclick="window.location.href='feed.html'">cancel</button>
   </div>
 </div>
@@ -58,139 +59,193 @@
 
 <script src="vent.js"></script>
 <script type="module">
-  import {
-    auth, db, onAuthStateChanged, signOut,
-    collection, addDoc, getDocs
-  } from './firebase.js';
+import {
+  auth, db, onAuthStateChanged, signOut,
+  collection, addDoc, getDocs, doc, getDoc, setDoc, deleteDoc, serverTimestamp
+} from './firebase.js';
 
-  let currentUsername = null;
-  let currentUid = null;
-  let selectedImageDataUrl = null;
-  let goToFeedAfterSupportModal = false;
+let editingDraftId = new URLSearchParams(window.location.search).get('draft');
+let currentUsername = null;
+let currentUid = null;
+let selectedImageDataUrl = null;
+let goToFeedAfterSupportModal = false;
 
-  onAuthStateChanged(auth, (user) => {
-    if (!user){
-      window.location.href = 'login.html';
-      return;
+onAuthStateChanged(auth, async (user) => {
+  if (!user){
+    window.location.href = 'login.html';
+    return;
+  }
+  currentUsername = user.displayName || user.email;
+  currentUid = user.uid;
+  document.getElementById('nav').innerHTML = buildNavHtml(currentUsername, currentUid);
+  const signOutBtn = document.getElementById('navSignOut');
+  if (signOutBtn){
+    signOutBtn.addEventListener('click', async () => {
+      await signOut(auth);
+      window.location.href = 'index.html';
+    });
+  }
+
+  if (editingDraftId){
+    const draftSnap = await getDoc(doc(db, 'users', currentUid, 'drafts', editingDraftId));
+    if (draftSnap.exists()){
+      const d = draftSnap.data();
+      document.getElementById('postTitleInput').value = d.title || '';
+      document.getElementById('postInput').value = d.text || '';
+      if (d.imageUrl){
+        selectedImageDataUrl = d.imageUrl;
+        document.getElementById('imagePreview').src = d.imageUrl;
+        document.getElementById('imagePreviewWrap').style.display = 'block';
+      }
+      if (d.isAnon){
+        document.getElementById('postAsAnon').checked = true;
+        document.getElementById('postAsAnon').dispatchEvent(new Event('change'));
+      }
     }
-    currentUsername = user.displayName || user.email;
-    currentUid = user.uid;
-    document.getElementById('nav').innerHTML = buildNavHtml(currentUsername, currentUid);
-    const signOutBtn = document.getElementById('navSignOut');
-    if (signOutBtn){
-      signOutBtn.addEventListener('click', async () => {
-        await signOut(auth);
-        window.location.href = 'index.html';
-      });
-    }
-  });
+  }
+});
 
-  document.getElementById('attachImageBtn').addEventListener('click', () => {
-    document.getElementById('postImageInput').click();
-  });
+document.getElementById('attachImageBtn').addEventListener('click', () => {
+  document.getElementById('postImageInput').click();
+});
 
-  document.getElementById('postImageInput').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')){
-      alert('please choose an image file.');
-      return;
-    }
-    const note = document.getElementById('composerNote');
-    note.className = 'msg show calm';
-    note.textContent = 'compressing image...';
-    try {
-      const dataUrl = await compressImageToDataUrl(file, 900, 700 * 1024);
-      selectedImageDataUrl = dataUrl;
-      document.getElementById('imagePreview').src = dataUrl;
-      document.getElementById('imagePreviewWrap').style.display = 'block';
-      note.className = 'msg';
-    } catch (err){
-      note.className = 'msg show warn';
-      note.textContent = "that image couldn't be compressed small enough — try a smaller or simpler image.";
-    }
-  });
-
-  document.getElementById('postAsAnon').addEventListener('change', (e) => {
-    const preview = document.getElementById('anonPreview');
-    if (e.target.checked && currentUid){
-      preview.textContent = `posting as: ${generateAnonName(currentUid)}`;
-      preview.style.display = 'block';
-    } else {
-      preview.style.display = 'none';
-    }
-  });
-
-  document.getElementById('removeImageBtn').addEventListener('click', () => {
-    selectedImageDataUrl = null;
-    document.getElementById('postImageInput').value = '';
-    document.getElementById('imagePreviewWrap').style.display = 'none';
-  });
-
-  document.getElementById('postBtn').addEventListener('click', async () => {
-    const titleInput = document.getElementById('postTitleInput');
-    const input = document.getElementById('postInput');
-    const note = document.getElementById('composerNote');
+document.getElementById('postImageInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')){
+    alert('please choose an image file.');
+    return;
+  }
+  const note = document.getElementById('composerNote');
+  note.className = 'msg show calm';
+  note.textContent = 'compressing image...';
+  try {
+    const dataUrl = await compressImageToDataUrl(file, 900, 700 * 1024);
+    selectedImageDataUrl = dataUrl;
+    document.getElementById('imagePreview').src = dataUrl;
+    document.getElementById('imagePreviewWrap').style.display = 'block';
     note.className = 'msg';
-    const title = titleInput.value.trim();
-    const text = input.value.trim();
-    if (!text) return;
+  } catch (err){
+    note.className = 'msg show warn';
+    note.textContent = "that image couldn't be compressed small enough — try a smaller or simpler image.";
+  }
+});
 
-    if (Math.random() < 0.05){
-      document.getElementById('errorModal').classList.add('show');
-      return;
+document.getElementById('postAsAnon').addEventListener('change', (e) => {
+  const preview = document.getElementById('anonPreview');
+  if (e.target.checked && currentUid){
+    preview.textContent = `posting as: ${generateAnonName(currentUid)}`;
+    preview.style.display = 'block';
+  } else {
+    preview.style.display = 'none';
+  }
+});
+
+document.getElementById('removeImageBtn').addEventListener('click', () => {
+  selectedImageDataUrl = null;
+  document.getElementById('postImageInput').value = '';
+  document.getElementById('imagePreviewWrap').style.display = 'none';
+});
+
+document.getElementById('postBtn').addEventListener('click', async () => {
+  const titleInput = document.getElementById('postTitleInput');
+  const input = document.getElementById('postInput');
+  const note = document.getElementById('composerNote');
+  note.className = 'msg';
+  const title = titleInput.value.trim();
+  const text = input.value.trim();
+  if (!text) return;
+
+  if (Math.random() < 0.05){
+    document.getElementById('errorModal').classList.add('show');
+    return;
+  }
+
+  if (containsAny(text, explicitWords) || (title && containsAny(title, explicitWords))){
+    note.textContent = "this can't be posted — vent. doesn't allow explicit (18+) content. try rephrasing.";
+    note.classList.add('show', 'warn');
+    return;
+  }
+
+  const usernamesSnap = await getDocs(collection(db, 'usernames'));
+  const usernames = [];
+  usernamesSnap.forEach(d => usernames.push(d.id));
+
+  const isBullying = containsAny(text, bullyWords) || (title && containsAny(title, bullyWords));
+  const target = findTargetedUsername(text, usernames, currentUsername) || (title ? findTargetedUsername(title, usernames, currentUsername) : null);
+  const isSelfHarm = containsAny(text, selfHarmWords) || (title && containsAny(title, selfHarmWords));
+
+  const isAnon = document.getElementById('postAsAnon').checked;
+
+  try {
+    await addDoc(collection(db, 'posts'), {
+      author: isAnon ? generateAnonName(currentUid) : currentUsername,
+      authorUid: currentUid,
+      isAnon: isAnon,
+      title: title || null,
+      text: text,
+      imageUrl: selectedImageDataUrl,
+      createdAt: Date.now(),
+      flaggedBullying: isBullying,
+      targetsUsername: target,
+      reported: false
+    });
+  } catch (err){
+    document.getElementById('errorModal').classList.add('show');
+    return;
+  }
+
+  if (editingDraftId){
+    await deleteDoc(doc(db, 'users', currentUid, 'drafts', editingDraftId));
+  }
+
+  if (isSelfHarm){
+    goToFeedAfterSupportModal = true;
+    document.getElementById('supportModal').classList.add('show');
+    return;
+  }
+
+  window.location.href = 'feed.html';
+});
+
+document.getElementById('saveDraftBtn').addEventListener('click', async () => {
+  const title = document.getElementById('postTitleInput').value.trim();
+  const text = document.getElementById('postInput').value.trim();
+
+  if (!title && !text && !selectedImageDataUrl){
+    alert('nothing to save yet.');
+    return;
+  }
+
+  const isAnon = document.getElementById('postAsAnon').checked;
+  const draftData = {
+    title: title || null,
+    text: text,
+    imageUrl: selectedImageDataUrl,
+    isAnon: isAnon,
+    updatedAt: serverTimestamp()
+  };
+
+  try {
+    if (editingDraftId){
+      await setDoc(doc(db, 'users', currentUid, 'drafts', editingDraftId), draftData, { merge: true });
+    } else {
+      const newDraftRef = doc(collection(db, 'users', currentUid, 'drafts'));
+      await setDoc(newDraftRef, draftData);
     }
+    window.location.href = 'drafts.html';
+  } catch (err){
+    alert("couldn't save the draft — try again in a moment.");
+  }
+});
 
-    if (containsAny(text, explicitWords) || (title && containsAny(title, explicitWords))){
-      note.textContent = "this can't be posted — vent. doesn't allow explicit (18+) content. try rephrasing.";
-      note.classList.add('show', 'warn');
-      return;
-    }
-
-    const usernamesSnap = await getDocs(collection(db, 'usernames'));
-    const usernames = [];
-    usernamesSnap.forEach(d => usernames.push(d.id));
-
-    const isBullying = containsAny(text, bullyWords) || (title && containsAny(title, bullyWords));
-    const target = findTargetedUsername(text, usernames, currentUsername) || (title ? findTargetedUsername(title, usernames, currentUsername) : null);
-    const isSelfHarm = containsAny(text, selfHarmWords) || (title && containsAny(title, selfHarmWords));
-
-    const isAnon = document.getElementById('postAsAnon').checked;
-
-    try {
-      await addDoc(collection(db, 'posts'), {
-        author: isAnon ? generateAnonName(currentUid) : currentUsername,
-        authorUid: currentUid,
-        isAnon: isAnon,
-        title: title || null,
-        text: text,
-        imageUrl: selectedImageDataUrl,
-        createdAt: Date.now(),
-        flaggedBullying: isBullying,
-        targetsUsername: target,
-        reported: false
-      });
-    } catch (err){
-      document.getElementById('errorModal').classList.add('show');
-      return;
-    }
-
-    if (isSelfHarm){
-      goToFeedAfterSupportModal = true;
-      document.getElementById('supportModal').classList.add('show');
-      return;
-    }
-
-    window.location.href = 'feed.html';
-  });
-
-  document.getElementById('closeSupportModal').addEventListener('click', () => {
-    document.getElementById('supportModal').classList.remove('show');
-    if (goToFeedAfterSupportModal) window.location.href = 'feed.html';
-  });
-  document.getElementById('closeErrorModal').addEventListener('click', () => {
-    document.getElementById('errorModal').classList.remove('show');
-  });
+document.getElementById('closeSupportModal').addEventListener('click', () => {
+  document.getElementById('supportModal').classList.remove('show');
+  if (goToFeedAfterSupportModal) window.location.href = 'feed.html';
+});
+document.getElementById('closeErrorModal').addEventListener('click', () => {
+  document.getElementById('errorModal').classList.remove('show');
+});
 </script>
 </body>
 </html>
